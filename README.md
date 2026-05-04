@@ -369,3 +369,117 @@ services: # define all containers and its configurations like ports, services et
       - /tmp:rw,noexec,nosuid
     
 ```
+
+## Install Docker Compose
+
+```bash
+sudo apt-get update
+sudo apt-get install docker-compose-plugin
+
+docker compose version
+```
+
+### Docker compose Up / Down / Logs
+
+```bash
+# Create Directory
+mkdir demo-compose
+cd demo-compose
+
+# Download the Docker Compose file
+wget https://github.com/aws-containers/retail-store-sample-app/releases/download/v1.3.0/docker-compose.yaml
+
+# Set environment variable
+export DB_PASSWORD='mydbkalyan101'
+
+# Start all services
+## Important Note:  if your file name is docker-compose.yaml dont need to specify -f with file
+docker compose -f docker-compose.yaml up
+docker compose up 
+
+# OR start in detached mode (background)
+docker compose -f docker-compose.yaml up -d
+docker compose up -d
+
+# Stop all services (gracefully) (NOT NEEDED NOW - JUST FOR REFERENCE)
+docker compose down
+```
+
+### Test Apps after Docker Compose Up
+
+```bash
+ec2_ip:8888
+```
+
+- Ensure all services are healthy by topology
+
+```bash
+ec2_ip:8888/topology
+```
+
+
+
+
+## Docker Compose Commands
+
+1. List Running Services
+
+```bash
+docker compose ps
+```
+
+2. Stop/Start Single Services
+
+```bash
+docker compose stop orders
+
+# Ensure it really Stopped ?
+docker compose ps
+docker compose ps -a
+
+# Start it
+docker compose start orders
+```
+
+3. Restart a single service
+
+```bash
+docker compose restart cart
+
+docker compose ps
+```
+
+4. View logs of single service
+
+```bash
+# Logs for all services
+docker compose logs
+
+# Logs for a single service
+docker compose logs checkout
+
+# Live Logs
+docker compose logs -f checkout
+```
+
+### Docker Compose Stats
+
+- It will display a live stream of container resource usage
+
+```bash
+docker compose stats
+
+docker compose stats <container_name>
+docker compose stats ui
+```
+
+### Show current process in containers
+
+```bash
+# for all containers
+docker compose top 
+
+# for a single container
+docker compose top ui
+```
+

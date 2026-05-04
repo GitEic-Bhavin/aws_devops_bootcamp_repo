@@ -1,0 +1,3 @@
+demo-docker-build_tf/Bhavin_ec2-key.pem
+demo-docker-build_tf/.terraform*
+demo-docker-build_tf/terraform.tfstate*

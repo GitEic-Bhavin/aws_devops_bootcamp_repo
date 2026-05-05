@@ -8,7 +8,7 @@ module "ec2" {
     source = "./modules/ec2"
     ec2_tags = var.ec2_tags
     instance_type = var.instance_type
-    subnet_id = module.vpc.subnet_id
+    subnet_id = module.vpc.public_subnet_ids[0]
     sg_id = module.sg.sg_id
     mdatp_file_path = var.mdatp_file_path
 }

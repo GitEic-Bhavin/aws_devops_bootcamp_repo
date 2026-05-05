@@ -20,7 +20,8 @@ variable "ec2_tags" {
 
 variable "instance_type" {
   type = string
-  default = "t2.medium"
+  # default = "t2.medium"
+  default = "t3.large"
 }
 
 # variable "subnet_id" {
@@ -49,7 +50,7 @@ variable "ec2_sg_tags" {
 
 variable "ingress_ports" {
   type = list(number)
-  default = [22, 80, 8080]
+  default = [22, 80, 8080, 8888]
 
 }
 
@@ -57,3 +58,4 @@ variable "mdatp_file_path" {
   type = string
   default = "/home/einfochips/Downloads/ubuntu_20.04/mdatp_onboard.json"
 }
+

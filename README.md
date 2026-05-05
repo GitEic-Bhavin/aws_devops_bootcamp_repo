@@ -405,6 +405,36 @@ docker compose up -d
 docker compose down
 ```
 
+- Docker compose up
+
+![alt text](dcup.png)
+
+- UI of apps
+
+![alt text](uisc.png)
+
+
+#####################
+- Catelog Service trigger
+
+![alt text](ctlgsc.png)
+
+- After added product to cart, cart service trigger
+
+![alt text](cart.png)
+
+- After checkout , checkout service will trigger
+
+![alt text](chout.png)
+
+- Delivery service
+
+![alt text](delivery.png)
+
+- Payment
+
+![alt text](py.png)
+
 ### Test Apps after Docker Compose Up
 
 ```bash
@@ -417,6 +447,7 @@ ec2_ip:8888
 ec2_ip:8888/topology
 ```
 
+![alt text](topology.png)
 
 
 
@@ -428,10 +459,14 @@ ec2_ip:8888/topology
 docker compose ps
 ```
 
+![alt text](dcps.png)
+
 2. Stop/Start Single Services
 
 ```bash
 docker compose stop orders
+
+![alt text](stod.png)
 
 # Ensure it really Stopped ?
 docker compose ps
@@ -441,6 +476,8 @@ docker compose ps -a
 docker compose start orders
 ```
 
+![alt text](sods.png)
+
 3. Restart a single service
 
 ```bash
@@ -448,6 +485,8 @@ docker compose restart cart
 
 docker compose ps
 ```
+
+![alt text](rscart.png)
 
 4. View logs of single service
 
@@ -458,9 +497,14 @@ docker compose logs
 # Logs for a single service
 docker compose logs checkout
 
+![alt text](lgch.png)
+
 # Live Logs
 docker compose logs -f checkout
 ```
+
+![alt text](llogs.png)
+
 
 ### Docker Compose Stats
 
@@ -473,6 +517,9 @@ docker compose stats <container_name>
 docker compose stats ui
 ```
 
+![alt text](stats.png)
+
+
 ### Show current process in containers
 
 ```bash
@@ -483,3 +530,84 @@ docker compose top
 docker compose top ui
 ```
 
+![alt text](dctops.png)
+
+
+## Explore --force-recreate commands
+
+- We will change in ui service and then we will up containers by docker compose to see its impact is really bring to new changes
+
+- Bydefault our apps uses **Blue** color which is set to default.
+
+- We can ensure by below table where default env has set for our **UI** Service.
+
+| Name                              | Description                                                                 | Default                  |
+|----------------------------------|-----------------------------------------------------------------------------|--------------------------|
+| PORT                             | The port which the server will listen on                                   | 8080                     |
+| RETAIL_UI_THEME                  | Name of the theme for the UI (default, green, orange, teal)                | "default"                |
+| RETAIL_UI_DISABLE_DEMO_WARNINGS  | Disable the UI messages warning about demonstration content                | false                    |
+| RETAIL_UI_PRODUCT_IMAGES_PATH    | Overrides the location of sample product images                            | ""                       |
+| RETAIL_UI_ENDPOINTS_CATALOG      | Endpoint of catalog API (false = mock implementation)                      | false                    |
+| RETAIL_UI_ENDPOINTS_CARTS        | Endpoint of carts API (false = mock implementation)                        | false                    |
+| RETAIL_UI_ENDPOINTS_ORDERS       | Endpoint of orders API (false = mock implementation)                       | false                    |
+| RETAIL_UI_ENDPOINTS_CHECKOUT     | Endpoint of checkout API (false = mock implementation)                     | false                    |
+| RETAIL_UI_CHAT_ENABLED           | Enable the chat bot UI                                                     | false                    |
+| RETAIL_UI_CHAT_PROVIDER          | Chat provider (bedrock, openai, mock)                                      | ""                       |
+| RETAIL_UI_CHAT_MODEL             | Chat model to use (depends on provider)                                    | ""                       |
+| RETAIL_UI_CHAT_TEMPERATURE       | Model temperature                                                          | 0.6                      |
+| RETAIL_UI_CHAT_MAX_TOKENS        | Maximum response tokens                                                    | 300                      |
+| RETAIL_UI_CHAT_PROMPT            | Model system prompt                                                        | (see source)             |
+| RETAIL_UI_CHAT_BEDROCK_REGION    | Amazon Bedrock region                                                      | ""                       |
+| RETAIL_UI_CHAT_OPENAI_BASE_URL   | Base URL for OpenAI endpoint                                               | http://localhost:8888    |
+| RETAIL_UI_CHAT_OPENAI_API_KEY    | API key for OpenAI endpoint                                                | ""                       |
+
+- **We will change default blue to like `Green` color**.
+
+- Go to container named `ui` in docker compose.
+
+- Add env `RETAIL_UI_THEME=green`.
+
+![alt text](uithenv.png)
+
+- stop and start ui containers.
+
+![alt text](rsui.png)
+
+- **Will it changed from blue to Greens ?**
+
+- `NO`.
+
+
+`Lets See on UI`.
+
+![alt text](uisc.png)
+
+**Bcz, To bring new changes in docker container, `IT MUST RECREATED THE CONTAINERS`**.
+
+- You can ensure directly by exec to grep all env.
+
+![alt text](genv.png)
+
+- Still it has not added new env here.
+
+![alt text](envl.png)
+
+- `Use --force-recreate to bring new changes`
+
+```bash
+docker compose up -d --force-recreate ui
+```
+
+![alt text](frst.png)
+
+- Go to UI
+
+![alt text](dcrs.png)
+
+```bash
+docker compose exec ui | grep RETAIL
+```
+
+- It should show new added envs
+
+![alt text](aenvs.png)

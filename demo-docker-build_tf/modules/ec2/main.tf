@@ -40,6 +40,9 @@ resource "aws_instance" "example" {
     key_name               = aws_key_pair.main.key_name
     vpc_security_group_ids = [var.sg_id]
 
+    associate_public_ip_address = true
+
+
     connection {
       type = "ssh"
       user = "ubuntu"
@@ -57,21 +60,14 @@ resource "aws_instance" "example" {
 
     # Installing MDATP in ubuntu ec2 user data
 
-    user_data = <<-EOF
+    user_data = <<-USERDATA
                 #!/bin/bash
                 set -e
 
                 apt-get update -y
                 echo 'Installing docker'
-                apt-get install -y curl libplist-utils gpg gnupg apt-transport-https docker.io
 
-                systemctl enable docker
-                systemctl start docker
-                usermod -aG docker ubuntu
-
-                docker version
-                echo 'Installing docker hello-world'
-                docker run hello-world
+                ${file("${path.module}/docker_install.sh")}
 
                 # Install base packages
                 apt-get update -y
@@ -111,7 +107,7 @@ resource "aws_instance" "example" {
                 # Enable real-time protection
                 mdatp config real-time-protection --value enabled
 
-                EOF
+                USERDATA
 
     tags = var.ec2_tags
 

@@ -611,3 +611,119 @@ docker compose exec ui | grep RETAIL
 - It should show new added envs
 
 ![alt text](aenvs.png)
+
+
+# Builx - Multi-platform Docker Image
+
+![alt text](buildxarch.png)
+
+- For instance, we build docker image on platform of `AMD64` EC2 and push to docker hub repo.
+
+- Same Docker Image we pulled into another EC2 which has platform of `ARM64`.
+
+- This image will never work on `ARM64`.
+
+- This is key challanges we are facing todays.
+
+- For that we have to build `Multi Platform Docker Image` by usig **buildx**.
+
+- `builx` uses **QEMU Emulator** which is generally slows to build images.
+
+- **QEMU Emulator** can help us to build multi-platform docker image with `Same docker image tag like 1.0.0` which will have both image `ARM64` and `AMD64`.
+
+- Whenever you pull docker image with same tag `1.0.0` in ec2 it will pull based on your EC2 platform.
+
+## Procedure for buildx multi-platform docker image
+
+### Step 1: Check your platform
+
+- Check our platform
+
+```bash
+uname -m
+# x86_64 - which is AMD64
+```
+
+### Step 2: Ensure Buildx is available
+
+```bash
+docker buildx version
+# github.com/docker/buildx v0.33.0 f7897eba028583e0071642db3c011e860444f8cf
+
+export DOCKER_BUILDKIT=1
+```
+
+### Step 3: Install QEMU Emulator
+
+```bash
+# Reinstall QEMU binfmt handlers
+docker run --privileged --rm tonistiigi/binfmt --install all
+
+# OR explicitly for arm64 + amd64
+docker run --privileged --rm toinstiigi/binfmt --install arm64,amd64
+```
+
+![alt text](iqemu.png)
+
+### Step 4: Create a containerized Buildx builder
+
+```bash
+# Create a new multiarch builder that uses BuildKit in a container
+docker buildx create --name multiarch --driver docker-container --use
+
+# To activate this multiarch Buildx QEMU Emulator you will required to Bootstrap to detect all supported platforms
+docker buildx inspect --bootstrap
+
+# List Buildx Builders
+docker buildx ls
+```
+
+![alt text](ibuildx.png)
+
+
+### Step 5: Docker hub login & Variables
+
+```bash
+export DOCKERHUB_USER="bhavin1099"
+export DH_REPO="retail-ui-multiarch"
+export TAG="1.0.0"
+
+export IMAGE="${DOCKERHUB_USER}/${DH_REPO}:${TAG}"
+echo $IMAGE
+
+# Loing to Docker Repo
+docker login -u "${DOCKERHUB_USER}"
+```
+
+## Step 6: Use your App Code to Build Buildx
+
+```bash
+# create dir
+mkdir demo-multiarch
+cd demo-multiarch
+
+# Download App code
+wget https://github.com/aws-containers/retail-store-sample-app/archive/refs/tags/v1.3.0.zip
+
+# Unzip Application Source
+unzip v1.3.0.zip
+
+# Change Directory to UI Source folder
+cd retail-store-sample-app-1.3.0/src/ui
+cat Dockerfile
+```
+
+### Step 7: Build Buildx Docker Image
+
+```bash
+DOCKER_BUILDKTI=1 docker buildx build \
+  --platform linux/arm64,amd64 \
+  -t "${IMAGE}" \
+  --push .
+
+# This image will build for linux arm64 aned linux amd64 platform
+```
+
+
+
+

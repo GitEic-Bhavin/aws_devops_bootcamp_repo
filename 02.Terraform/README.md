@@ -234,3 +234,73 @@ cidrsubnets(prefix, newbits...)
 
 ![alt text](cidrs.png)
 
+Meta-Arguments
+---
+
+- Meta-arguments are a class of arguments that control how Terraform creates and manages your infrastructure. 
+
+- You can use meta-arguments in any type of resource. 
+
+- You can also use most meta-arguments in module blocks.
+
+### 1. depends_on
+
+- This is a way of explicitly define dependencies in the resource block.
+
+### 2. lifecycle
+
+- Its a meta arguments to contorl how your resource should accept rule and provisoin, update, delete resources.
+
+#### 2.1 create_before_destroy
+
+  - It will create a new resource of existing resource, after that it will destory existing resource.
+
+#### 2.2 prevent_destroy
+ 
+  - It will prevent resource from terraform destroy command for resource like vpc.
+
+#### 2.3 ingnore_changes
+
+  - To ingore specific or all chnages made manually after provision resource by terraform.
+  - For instance, Instance name, tags can be ingored but `Instance Type` can't be ignored.
+
+
+### 3. count
+
+
+### 4. for_each
+
+- Its a meta arguments to create multiple instance of a resource block.
+
+- For instance, create multiple ec2, subnets.
+
+**values functions**
+
+- `values` takes a map and returns a list containing the values of the elements in that map.
+
+This are maps
+
+```bash
+ap-south-1a = 192.168.0.0/24
+ap-south-1b = 192.168.16.0/24
+ap-south-1c = 192.168.32.0/24
+```
+
+- We want to attach nat gateway in public subnet `ap-south-1a` only.
+
+- Genereally we doing like this
+
+```bash
+resource "aws_nat_gateway" "nat" {
+    allocation_id = aws_eip.nat.id
+    subnet_id = aws_subnet.pub[0].id
+}
+```
+
+- `But this will failed`. map can't use into this subnet_id. 
+
+- We have to pick one value from map values.
+
+- **values** functions will use here.
+
+![alt text](values.png)

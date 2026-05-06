@@ -1,12 +1,43 @@
-variable "s3_tags" {
-    type = map(string)
-    default = {
+variable "aws_region" {
+  description = "AWS region to deploy resources"
+  type        = string
+  default     = "us-east-1"
+}
 
+variable "environment_name" {
+  description = "Environment name used in resource names and tags"
+  type        = string
+  default     = "dev"
+}
+
+# variable "vpc_cidr" {
+#   description = "CIDR block for the VPC"
+#   type        = string
+#   default     = "10.0.0.0/16"
+# }
+
+variable "tags" {
+  description = "Global tags to apply to all resources"
+  type        = map(string)
+  default     = {
+    Terraform = "true"
+  }
+}
+
+# variable "subnet_newbits" {
+#   description = "Number of new bits to add to VPC CIDR to generate subnets (e.g., 8 means /24 from /16)"
+#   type        = number
+#   default     = 8
+# }
+
+variable "s3_tags" {
+  type = map(string)
+  
+  default = {
         Department   = "PES_IA"
         Owner        = "bhavin.bhavsar@einfochips.com"
         End_Date     = "4 May 2026"
         Project_Name = "EIC_Internal"
         DM           = "Sachin.Shah1@einfochips.com"
-
-    }   
+    }
 }

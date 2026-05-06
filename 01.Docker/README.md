@@ -724,6 +724,12 @@ DOCKER_BUILDKTI=1 docker buildx build \
 # This image will build for linux arm64 aned linux amd64 platform
 ```
 
+![alt text](buildxrepo.png)
 
 
+- Inspect this image
+
+```bash
+docker buildx imagetools inspect bhavin1099/retail-ui-multiarch:1.0.0
+```
 

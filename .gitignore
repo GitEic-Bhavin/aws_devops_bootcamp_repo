@@ -1,3 +1,6 @@
 01.Docker/demo-docker-build_tf/Bhavin_ec2-key.pem
 01.Docker/demo-docker-build_tf/.terraform*
 01.Docker/demo-docker-build_tf/terraform.tfstate*
+02.Terraform/s3destroy
+02.Terraform/terraform.tfstate*
+02.Terraform/.terraform*

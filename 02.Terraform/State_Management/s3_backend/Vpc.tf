@@ -1,29 +1,32 @@
 # Use existing vpc , subnets, NAT and IGW, Route table
 
 data "aws_vpc" "exist" {
-  id = "vpc-02358ddc1cb955bcd"
+  id = var.vpc_id
 }
 
 resource "aws_subnet" "public" {
   vpc_id                  = data.aws_vpc.exist.id
-  cidr_block              = "10.0.11.0/24"
+  # cidr_block              = "10.0.11.0/24"
+  cidr_block = var.pub_sub_cidr_block
   availability_zone       = "ap-south-1a"
   map_public_ip_on_launch = true
 
-  tags = {
-    Name = "BhavinBhavsar-01-pub-subnet"
-  }
+  # tags = {
+  #   Name = "BhavinBhavsar-01-pub-subnet"
+  # }
+  tags = var.pub_sub_name
 }
 
 resource "aws_subnet" "private" {
   vpc_id            = data.aws_vpc.exist.id
-  cidr_block        = "10.0.111.0/24"
+  # cidr_block        = "10.0.111.0/24"
+  cidr_block = var.pvt_sub_cidr_block
   availability_zone = "ap-south-1a"
 
-  tags = {
-    Name = "BhavinBhavsar-01-priv-subnet"
-  }
-
+  # tags = {
+  #   Name = "BhavinBhavsar-01-priv-subnet"
+  # }
+  tags = var.pvt_sub_name
 }
 
 
@@ -49,7 +52,8 @@ output "igw_name" {
 data "aws_nat_gateway" "existing" {
   filter {
     name   = "tag:Name"
-    values = ["Bootcamp-vpc-do-not-delete-nat"] # Replace with your NAT GW Name tag
+    # values = ["Bootcamp-vpc-do-not-delete-nat"] # Replace with your NAT GW Name tag
+    values = var.nat_gateway_name
   }
 
   filter {

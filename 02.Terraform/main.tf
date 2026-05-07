@@ -1,4 +1,5 @@
 # # Create S3 bucket 
+# # For state management
 
 # resource "aws_s3_bucket" "s3_bucket" {
 #     bucket = "bhavindemo-s3-tf-${random_string.name.result}"

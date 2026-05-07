@@ -66,7 +66,7 @@
 #     tags = merge(var.tags, {
 #         Name = "${var.environment_name}-private-${each.key}"
 #     })
-  
+
 # }
 
 # # # Resource-5: Elastic IP for NAT Gateway

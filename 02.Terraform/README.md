@@ -304,3 +304,160 @@ resource "aws_nat_gateway" "nat" {
 - **values** functions will use here.
 
 ![alt text](values.png)
+
+## Setup VPC
+
+### 1. Use Exisiting VPC Resources
+
+- NAT and IGW Gateway, VPC, Pub and Pvt Route Table.
+
+- Use Data source to fetch and use existing resources
+
+```bash
+# Use existing vpc
+data "aws_vpc" "exist" {
+  id = "vpc-02358ddc1cb955bcd"
+}
+
+# Use IGW
+data "aws_internet_gateway" "existing" {
+  filter {
+    name   = "attachment.vpc-id"
+    values = [data.aws_vpc.exist.id]
+  }
+}
+
+output "igw_name" {
+  value = data.aws_internet_gateway.existing.attachments
+}
+
+# Use NAT Gateway
+data "aws_nat_gateway" "existing" {
+  filter {
+    name   = "tag:Name"
+    values = ["Bootcamp-vpc-do-not-delete-nat"] # Replace with your NAT GW Name tag
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+output "ngw_id" {
+  value = data.aws_nat_gateway.existing.id
+}
+```
+
+### 2. Create Rest of vpc resource
+
+- Pub and Pvt subnet.
+
+- Create Route table for both subnet
+
+```bash
+# Create locals to use expressions
+locals {
+  pub_rt_name  = "BhavinBhavsar-01-pub-rt"
+  priv_rt_name = "BhavinBhavsar-01-priv-rt"
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = data.aws_vpc.exist.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = data.aws_internet_gateway.existing.id
+
+  }
+
+  tags = {
+    Name = local.pub_rt_name
+  }
+}
+
+
+resource "aws_route_table" "private" {
+  vpc_id = data.aws_vpc.exist.id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = data.aws_nat_gateway.existing.id
+  }
+
+  tags = {
+    Name = local.priv_rt_name
+  }
+
+}
+```
+
+- Associate pub and pvt subnet to respected route table.
+
+```bash
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  subnet_id      = aws_subnet.private.id
+  route_table_id = aws_route_table.private.id
+}
+```
+
+### 3. Provision resources
+
+- Once validate configurations files , apply it.
+
+### 4. Varify resource map from Console
+
+![alt text](resourcemap.png)
+
+
+
+Terraform Variables Precedence Orders
+---
+
+| Priority | Source |
+| -------- | ------ |
+| **1(Highest)** | --var-file=<file_name> |
+| 2 | *.auto.tfvars |
+| 3 | terraform.tfvars.json |
+| 4 | terraform.tfvars |
+| 5 | TF_VAR_env | 
+| `6` | `variable.tf` |
+
+State Management
+---
+
+- We will use AWS S3 Bucket for Remote state management
+
+  - Write backend block in provider block.
+  - Use `use_lockfile = true`.
+  - Use `encrypt = true` for encryptions.
+
+```bash
+backend "s3" {
+  bucket = "bhavindemo-s3-tfstate-test-qde617"
+  key = "test/terraform.tfstate"
+  region = "ap-south-1"
+  encrypt = true
+  use_lockfile = true
+      
+  }
+```
+
+- Now provision your resources.
+
+- Your `terraform.tfstate` will be located in S3/test/terraform.tfstate.
+
+![alt text](s3state.png)
+
+
+- `terraform.tfstate.tflock` will be temporary created during provisioning resource period.
+
+- Once provisioned it will deleted.
+
+- At provisioning time any of other user can't access your state file bcz of `terraform.tfstate.tflock`.
+
+- This is called **state-lockings**.
+

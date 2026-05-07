@@ -4,3 +4,7 @@
 02.Terraform/s3destroy
 02.Terraform/terraform.tfstate*
 02.Terraform/.terraform*
+02.Terraform/State_Management/.terraform*
+02.Terraform/State_Management/terraform.tfstate*
+02.Terraform/State_Management/s3_backend/.terraform*
+02.Terraform/State_Management/s3_backend/terraform.tfstate*

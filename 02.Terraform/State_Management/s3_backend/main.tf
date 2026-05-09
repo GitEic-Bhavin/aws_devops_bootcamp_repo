@@ -10,5 +10,7 @@ module "vpc" {
     s3_env_name_s3 = var.s3_env_name_s3
     s3_remote_bucket_name = var.s3_remote_bucket_name
 
-  
+    vpc_cidr = var.vpc_cidr
+    subnet_newbits = var.subnet_newbits
+    tags = var.tags
 }

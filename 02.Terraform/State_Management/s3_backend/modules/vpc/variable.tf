@@ -33,3 +33,19 @@ variable "pub_sub_name" {
 variable "pvt_sub_name" {
   type = map(string)
 }
+
+variable "vpc_cidr" {
+  type = string
+}
+
+variable "subnet_newbits" {
+  
+}
+
+variable "environment_name" {
+  default = "test"
+}
+
+variable "tags" {
+  type = map(string)
+}

@@ -11,7 +11,7 @@ provider "aws" {
 # Terraform block used to define the required_versions of terraform cli versions and terraform providers versions
 
 terraform {
-  required_version = ">=1.0.0"
+  required_version = "~>1.14"
   required_providers {
     aws = {
       source  = "hashicorp/aws"

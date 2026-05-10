@@ -589,27 +589,27 @@ User Request
 ┌─────────────────────────────────────┐
 │ CLUSTER BOUNDARY                    │
 │                                     │
-│ ┌──────────────────────────────┐   │
-│ │ Master Node (Control Plane)  │   │
-│ │ - API Server                 │   │
-│ │ - Scheduler                  │   │
-│ │ - Controller Manager         │   │
-│ │ - etcd                       │   │
-│ └──────────────────────────────┘   │
+│ ┌──────────────────────────────┐    │
+│ │ Master Node (Control Plane)  │    │
+│ │ - API Server                 │    │
+│ │ - Scheduler                  │    │
+│ │ - Controller Manager         │    │
+│ │ - etcd                       │    │
+│ └──────────────────────────────┘    │
 │         ↓ orchestrates              │
-│ ┌──────────────────────────────┐   │
-│ │ Worker Nodes (Multiple)      │   │
-│ │                              │   │
-│ │ Node 1:                      │   │
-│ │ ├─ Kubelet                   │   │
-│ │ ├─ kube-proxy                │   │
-│ │ ├─ Container Runtime         │   │
-│ │ └─ Pods (running containers) │   │
-│ │                              │   │
-│ │ Node 2: (Same structure)     │   │
-│ │ Node N: (Same structure)     │   │
-│ │                              │   │
-│ └──────────────────────────────┘   │
+│ ┌──────────────────────────────┐    │
+│ │ Worker Nodes (Multiple)      │    │
+│ │                              │    │
+│ │ Node 1:                      │    │
+│ │ ├─ Kubelet                   │    │
+│ │ ├─ kube-proxy                │    │
+│ │ ├─ Container Runtime         │    │
+│ │ └─ Pods (running containers) │    │
+│ │                              │    │
+│ │ Node 2: (Same structure)     │    │
+│ │ Node N: (Same structure)     │    │
+│ │                              │    │
+│ └──────────────────────────────┘    │
 │                                     │
 └─────────────────────────────────────┘
     ↓
@@ -698,4 +698,630 @@ The master node makes intelligent decisions, while worker nodes execute those de
 - It will allow anybody from internet to your applications directly.
 
 - If you set to `["1.2.3.4/24"]` or your ip ranges , then it will allow from this CIDR only.
+
+
+
+
+
+
+
+
+
+
+
+**After Registered Nodes into NodeGroup**
+
+```bash
+aws eks --region ap-south-1 update-kubeconfig --name bhavindemo-eks-test
+```
+
+```bash
+kubectl get nodes
+kubectl get configmap aws-auth -n kube-system
+```
+
+![alt text](gnodes.png)
+
+- Check kube-system ns pods
+
+![alt text](nspods.png)
+
+
+########################
+
+
+
+# Kubernetes Pods
+
+I'll break down this comprehensive guide on Kubernetes Pods, covering all essential concepts that frequently appear in interviews.
+
+---
+
+## 1. **What is a Kubernetes Pod?**
+
+### Definition
+A **pod** is the **smallest deployable unit in Kubernetes**. It's a wrapper/abstraction layer around one or more containers.
+
+### Key Components Inside a Pod
+```
+┌─────────────────────────────────────┐
+│        Kubernetes Pod               │
+│  ┌──────────────────────────────┐   │
+│  │    Container(s)              │   │
+│  │  (One or more Docker images) │   │
+│  └──────────────────────────────┘   │
+│  ┌──────────────────────────────┐   │
+│  │    Network (Networking)      │   │
+│  └──────────────────────────────┘   │
+│  ┌──────────────────────────────┐   │
+│  │    Storage                   │   │
+│  └──────────────────────────────┘   │
+│  ┌──────────────────────────────┐   │
+│  │    Identity                  │   │
+│  └──────────────────────────────┘   │
+└─────────────────────────────────────┘
+```
+
+### Why Pods Exist?
+Kubernetes doesn't manage containers directly because:
+- It needs a higher-level abstraction
+- Containers alone don't provide networking, storage, and identity management
+- Pods provide these capabilities automatically
+
+---
+
+## 2. **Docker vs. Kubernetes Architecture**
+
+### Docker Approach
+```
+Docker Image → docker run command → Container → Application runs
+```
+- Direct container management
+- Container = single instance of your application
+- Multiple instances = multiple containers
+
+### Kubernetes Approach
+```
+Docker Image → Kubernetes Pod (wrapper) → Container inside Pod → Application runs
+```
+- Pods are the smallest unit, never containers directly
+- Pod wraps the container with networking, storage, and identity
+- More managed and orchestrated approach
+
+### Interview Question
+**Q: Why can't Kubernetes run containers directly?**
+
+**A:** Because containers alone lack the necessary infrastructure like:
+- Networking capabilities
+- Storage management
+- Identity and lifecycle management
+- Resource scheduling
+
+Kubernetes needs a higher abstraction (pod) to manage all these aspects.
+
+---
+
+## 3. **Prerequisites Before Understanding Pods**
+
+### Assumption 1: Docker Image Ready
+- You have a pre-built Docker image for your application
+- Example: Catalog microservice (CTM) from a retail store
+- Image is stored in a registry (Docker Hub, ECR, etc.)
+
+### Assumption 2: Kubernetes Cluster Ready
+- EKS (Amazon Elastic Kubernetes Service)
+- AKS (Azure Kubernetes Service)
+- Self-managed Kubernetes cluster
+- Or any other Kubernetes distribution
+
+**Why these matter?** You can't deploy pods without these prerequisites.
+
+---
+
+## 4. **How Pods Run on Worker Nodes**
+
+### Architecture
+```
+┌──────────────────────────────┐
+│   Kubernetes Cluster         │
+│                              │
+│  ┌────────────────┐  ┌─────┐│
+│  │ Worker Node 1  │  │Node2││
+│  │  ┌──────────┐  │  │┌──┐ ││
+│  │  │Pod (CTM) │  │  ││Pod││
+│  │  │Container │  │  │└──┘ ││
+│  │  └──────────┘  │  └─────┘│
+│  │  ┌──────────┐  │         │
+│  │  │Pod (CTM) │  │         │
+│  │  │Container │  │         │
+│  │  └──────────┘  │         │
+│  └────────────────┘         │
+└──────────────────────────────┘
+```
+
+### Pod Scheduling
+- **Kubernetes Scheduler** decides which worker node gets each pod
+- Considers: CPU availability, memory, node capacity
+- Automatic distribution across nodes
+- If Node 1 is full → pod goes to Node 2
+
+### Key Points
+- Pods are ephemeral (can be created/destroyed)
+- Worker nodes must have enough resources
+- Scheduler continuously balances load
+
+---
+
+## 5. **Scaling and Load Distribution**
+
+### Scenario: High Traffic to Catalog Service
+
+**Problem:** Your catalog microservice receives heavy traffic
+
+**Solution:** Create more pods
+
+```
+Before (1 instance):
+┌──────────┐
+│ Pod (CTM)│
+└──────────┘
+Request rate: 1000 req/s
+
+After (3 instances):
+┌──────────┐
+│ Pod (CTM)│  ← 333 req/s
+├──────────┤
+│ Pod (CTM)│  ← 333 req/s
+├──────────┤
+│ Pod (CTM)│  ← 333 req/s
+└──────────┘
+```
+
+### Key Features
+- Each pod runs **identical copy** of your container
+- Kubernetes scales automatically based on:
+  - Available worker node resources
+  - CPU/Memory requirements
+  - Load
+- Pod = single instance of your application
+- More instances = more pods (not more containers in one pod)
+
+**Q: How does Kubernetes scale applications?**
+
+**A:** By creating additional pods. Each pod is an independent instance of your application. If you need more capacity, you create more pods; you don't add more containers to existing pods.
+
+---
+
+## 6. **One Container Per Pod (Best Practice) ⭐**
+
+### The Golden Rule
+```
+RECOMMENDED APPROACH:
+┌─────────────────┐
+│ Pod 1           │
+│ └─ CTM Container│
+└─────────────────┘
+
+┌─────────────────┐
+│ Pod 2           │
+│ └─ CTM Container│
+└─────────────────┘
+
+NOT RECOMMENDED:
+┌──────────────────────┐
+│ Pod 1                │
+│ ├─ CTM Container 1   │  ← WRONG!
+│ └─ CTM Container 2   │
+└──────────────────────┘
+```
+
+### Why One Container Per Pod?
+
+| Aspect | One Container Per Pod | Multiple Containers |
+|--------|----------------------|-------------------|
+| Scaling | Easy - create new pods | Complex - changes pod logic |
+| Isolation | Better - each instance separate | Poor - coupled instances |
+| Failure | One failure = one pod | One failure = multiple instances |
+| Management | Simple and clean | Complicated |
+| Recommended |  YES |  NO |
+
+**Q: Is it a best practice to run multiple containers of the same application in one pod?**
+
+**A:** No, absolutely not. Best practice is one container per pod. If you need multiple instances of your application, create multiple pods, not multiple containers in one pod. This provides better isolation, easier scaling, and simpler management.
+
+---
+
+## 7. **Multi-Container Pods (Exception to the Rule)**
+
+### When to Use: Sidecar/Helper Patterns
+
+You can run multiple containers in one pod **only** for helper/sidecar containers that support your main application.
+
+### Example 1: Logging Agent
+```
+┌──────────────────────────────┐
+│ Pod (Multi-Container)        │
+│                              │
+│ ┌────────────────────────┐   │
+│ │ Main Container (CTM)   │   │
+│ │ Catalog Microservice   │   │
+│ │ → Generates logs       │   │
+│ └────────────────────────┘   │
+│          ↓ (shares storage)  │
+│ ┌────────────────────────┐   │
+│ │ Sidecar Container      │   │
+│ │ Logging Agent          │   │
+│ │ → Reads logs           │   │
+│ │ → Sends to CloudWatch  │   │
+│ └────────────────────────┘   │
+│                              │
+│ [Shared Network & Storage]   │
+└──────────────────────────────┘
+```
+
+### Example 2: Service Mesh Proxy
+```
+┌─────────────────────────────────┐
+│ Pod (Multi-Container)           │
+│                                 │
+│ ┌──────────────────┐            │
+│ │ Main Container   │            │
+│ │ (Your App)       │            │
+│ └──────────────────┘            │
+│          ↕ (intercepts traffic) │
+│ ┌──────────────────┐            │
+│ │ Sidecar: Envoy   │            │
+│ │ (Istio Proxy)    │            │
+│ │ → Traffic control│            │
+│ │ → Load balancing │            │
+│ └──────────────────┘            │
+│                                 │
+│ [Shared Network & Storage]      │
+└─────────────────────────────────┘
+```
+
+### Common Sidecar Use Cases
+1. **Logging Agents** - Collect and forward logs
+2. **Service Mesh Proxies** - Istio, Linkerd (Envoy proxy)
+3. **Monitoring Agents** - Prometheus, monitoring sidecars
+4. **Config Management** - Init containers that setup configs
+5. **Security Sidecars** - Network policies, encryption
+
+### Key Characteristics of Sidecars
+- Run alongside main container
+- Share the same **network** namespace
+- Share the same **storage** namespace
+- Support main application functionality
+- Not instances of your main application
+
+
+**Q: When would you use multiple containers in a single pod?**
+
+**A:** Only for sidecar or helper patterns. For example:
+- Adding a logging agent to collect and ship logs to CloudWatch
+- Adding an Envoy proxy for service mesh capabilities like Istio
+- Adding monitoring or security sidecars
+
+The key rule: never multiple containers of the *same* application; only helper containers that support your main application.
+
+---
+
+## 8. **Pod Lifecycle and Ephemeral Nature**
+
+### Important Characteristic
+Pods are **ephemeral** (temporary):
+- Can be created and destroyed dynamically
+- When a pod dies, it's gone
+- New pods are created to replace failed ones
+- Kubernetes handles this automatically
+
+### Why This Matters
+- Don't store persistent data inside pods
+- Use **Persistent Volumes** for data that must survive pod death
+- Design applications to be stateless when possible
+
+---
+
+## 9. **Complete Recap**
+
+### The 5 Core Concepts
+
+| Concept | Explanation |
+|---------|------------|
+| **Pod Definition** | Smallest deployable unit in Kubernetes; wrapper around containers |
+| **Not Direct Containers** | Kubernetes never runs containers directly; always uses pods |
+| **One Container Best Practice** | One container per pod is recommended for main applications |
+| **Scaling via Pods** | Scale by creating more pods, not more containers per pod |
+| **Sidecar Containers** | Only exception: helper/sidecar containers for logging, proxies, etc. |
+
+### What Pods Provide
+- **Networking** - Pods share network namespace
+- **Storage** - Shared storage access
+- **Identity** - Unique identification
+- **Orchestration** - Kubernetes manages them
+
+### Worker Node Distribution
+- Pods are scheduled on worker nodes
+- Kubernetes scheduler decides placement
+- Automatic distribution based on resources
+- Pods spread across multiple nodes for reliability
+
+---
+
+## 10. **Typical Interview Questions & Answers**
+
+### Q1: What is a Kubernetes Pod?
+**A:** A pod is the smallest deployable unit in Kubernetes. It's a wrapper around one or more containers that provides networking, storage, and identity management. Unlike Docker where you run containers directly, Kubernetes always wraps containers in pods.
+
+### Q2: Why can't Kubernetes run Docker containers directly?
+**A:** Because containers alone don't provide:
+- Networking abstraction
+- Storage management
+- Identity and lifecycle management
+
+Kubernetes needs a higher-level abstraction (pod) to manage all these aspects and provide orchestration capabilities.
+
+### Q3: Is it okay to run multiple containers of the same application in one pod?
+**A:** No, that's not recommended. Best practice is one container per pod. If you need multiple instances, create multiple pods. Multiple containers should only be used for sidecar/helper patterns (logging agents, service mesh proxies, etc.).
+
+### Q4: How are pods distributed across nodes?
+**A:** The Kubernetes Scheduler automatically decides which worker node each pod runs on based on:
+- Available CPU and memory
+- Node capacity
+- Resource requests and limits
+
+If a node is full, new pods are scheduled on other available nodes.
+
+### Q5: What happens when a pod fails?
+**A:** Pods are ephemeral. If a pod dies, it's gone. Kubernetes uses higher-level controllers (Deployments, StatefulSets) to automatically create replacement pods to maintain the desired state.
+
+### Q6: Can pods share resources?
+**A:** Yes, containers within the same pod:
+- Share the same **network namespace** (same IP, can communicate on localhost)
+- Share the same **storage** (if volumes are mounted)
+- Share the same **identity/hostname**
+
+This is why sidecars work well - they can access the main container's network and storage.
+
+### Q7: What's the difference between scaling in Docker vs Kubernetes?
+**A:** 
+- **Docker:** Create more containers using `docker run`
+- **Kubernetes:** Create more pods through Deployments; Kubernetes handles scheduling
+
+Kubernetes automatically distributes pods across nodes, provides service discovery, and self-heals failed pods.
+
+### Q8: What are some real-world sidecar examples?
+**A:**
+- **Logging Agent:** Collects application logs and sends to CloudWatch/ELK
+- **Envoy Proxy:** Adds service mesh capabilities (Istio)
+- **Monitoring Agent:** Collects metrics for Prometheus
+- **Init Container:** Sets up environment before main app starts
+
+### Q9: Are pods suitable for storing persistent data?
+**A:** No. Pods are ephemeral - they can be deleted anytime. For persistent data, use:
+- **Persistent Volumes (PV)**
+- **StatefulSets** for stateful applications
+- **External databases** for application data
+
+### Q10: How do pods communicate with each other?
+**A:** Pods communicate through:
+- **Service Names** (DNS)
+- **IP addresses** (each pod gets unique IP)
+- **Kubernetes Service** abstracts pod communication
+
+## 11. **Key Terminology**
+
+- **Ephemeral** - Temporary; pods can be created/destroyed
+- **Sidecar** - Helper container running alongside main container
+- **Worker Node** - Physical/virtual machine where pods run
+- **Scheduler** - Kubernetes component that decides pod placement
+- **Deployable Unit** - The smallest thing you can deploy in Kubernetes
+- **Container Orchestration** - Kubernetes manages lifecycle and distribution
+- **Service Mesh** - Like Istio, uses sidecar proxies
+- **Namespace Sharing** - Containers in same pod share network/storage
+
+
+
+## Create Pods
+
+- Once pod created, map your local port to container port
+
+```bash
+kubectl port-forward <resource-type>/<resource-name> local_port:container_port
+
+kubectl port-forward pods/catalog-pod 7070:8080
+```
+
+![alt text](htep.png)
+
+```bash
+# Check health endponits
+localhost:7070/health
+
+# Check topology endponts
+localhost:7070/topology
+
+# list products
+localhost:7070/catalog/products
+```
+
+![alt text](cp.png)
+
+- Check logs
+
+```bash
+kubectl logs -f pod/catalog-pod
+
+# Topology, health ep accessed
+```
+
+![alt text](logsp.png)
+
+- Run command in pods
+
+```bash
+kubectl exec -it catalog-pod -- sh
+ls
+```
+
+![alt text](execp.png)
+
+- Run command inside pod from cli
+
+```bash
+kubectl exec -it catalog-pod -- ls
+```
+
+![alt text](descp.png)
+
+- **To Scale replicas from 1 to 3 in deployments**
+
+```bash
+kubectl scale deployment catalog --replicas=3
+```
+
+### Update the Deployment Image
+
+```bash
+# List Deployment Revisions
+kubectl rollout history deployment/catalog
+
+# Update Deployment to new image
+kubectl set image deployment/catalog catalog: "public.ecr.aws/aws-containers/retail-store-sample-catalog:1.3.0"
+
+# List deployment Revisions
+kubectl rollout histroy deployment/catalog
+```
+
+
+
+## ConfigMaps
+
+- A configmap is an API object used to `store non-confidencial data` in `key-value pairs`.
+
+- Pods can consume `ConfigMap` as `Env Vars`, `Command-Line Arguments`, or as `Configuration files in a Volume`.
+
+- A ConfigMap allows you to **decouple env specific config from your container images**, so that your apps are easier portable.
+
+
+**`ConfigMap Doesn't provide Secrecy or Encryptions`**.
+
+**`If You want to store Confidential , Sensitive Data`, use a **Secret** rather than a `ConfigMap`**.
+
+- ConfigMap is not designed to hold large chunks of data.
+
+- The data stored in a ConfigMap can't exceed **1 MiB**. 
+
+- `If you store settings which is larger than this limit`, you should use those big files **data mounted in a volumes** or Use a **seperate database or file service**.
+
+- The Pod , Deployment and ConfigMap Must be in a Same NameSpace.
+
+
+
+  - Instead of hardcoding non-sensitive values in code, container image, pod, deployment WE KEEP THEM OUTSIDE THE APPLICATIONS.
+
+**Difference between `Env` and `ConfigMap`**.
+
+  - 1. `env` - Is a way to pass values into a containers.
+
+    - By define values like DB_USER, DB_PASSWD in a container, pod, deployment in `env:` which is not recommended in `PROD`.
+
+  - 2. `ConfigMap` - It stores value centrally.
+
+  - Instead passing env hardcodly in a pod, deployment, or docker image directly, We can use `ConfigMap` which is stored this values centrally and outside of applications.
+
+
+
+- Create ConfigMap
+
+## Using Configmaps as environment variables
+
+To use a Configmap in an environment variable in a Pod:
+
+  - 1. For each container in your Pod specification, add an environment variable for each Configmap key that you want to use to the env[].valueFrom.configMapKeyRef field.
+  - 2. Modify your image and/or command line so that the program looks for values in the specified environment variables.
+
+
+```yml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: game-demo # This is configmap names.
+data: # We are defining key-value pair in data block.
+  # property-like keys; each key maps to a simple value
+  player_initial_lives: "3"
+  ui_properties_file_name: "user-interface.properties"
+
+  # file-like keys
+  game.properties: |
+    enemy.types=aliens,monsters
+    player.maximum-lives=5    
+  user-interface.properties: |
+    color.good=purple
+    color.bad=yellow
+    allow.textmode=true    
+```
+
+- Accessing this configmap each key and its value into this Pod.yml
+
+```yml
+# ConfigMap_Pod.yml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-demo-pod
+spec:
+  containers:
+    - name: demo
+      image: alpine
+      command: ["sleep", "3600"]
+      env: # We are passing ConfigMap as Enviroment Vars.
+        # Define the environment variable
+        # PLAYER_INITIAL_LIVES is a env names
+        - name: PLAYER_INITIAL_LIVES # Notice that the case is different here
+                                     # from the key name in the ConfigMap.
+          valueFrom:
+            configMapKeyRef:
+              name: game-demo           # The ConfigMap this value comes from.
+              key: player_initial_lives # The key to fetch.
+        - name: UI_PROPERTIES_FILE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: game-demo
+              key: ui_properties_file_name
+      volumeMounts:
+      - name: config
+        mountPath: "/config"
+        readOnly: true
+  volumes:
+  # You set volumes at the Pod level, then mount them into containers inside that Pod
+  - name: config
+    configMap:
+      # Provide the name of the ConfigMap you want to mount.
+      name: game-demo
+      # An array of keys from the ConfigMap to create as files
+      items:
+      - key: "game.properties"
+        path: "game.properties"
+      - key: "user-interface.properties"
+        path: "user-interface.properties"
+```
+
+
+**Bydefault If you use ConfigMap mounted on a Volume**, If you update configmap from that volume like add new env, key-value pair in that volume, **It will automatically updates in your pods**.
+
+- A container using a ConfigMap as a **subPath volume mount** will `not receive ConfigMap updates`.
+
+- ConfigMaps consumed as **environment variables** are `not updated automatically` and **require a pod restart**.
+
+| Name | Descriptions | Default |
+| ---- | ------------ | ------- |
+| Port | The server is listions on port | 8080 |
+| RETAIL_CATALOG_PERSISTENCE_PROVIDER | The persistence provider to use, can be `in-memory` or `mysql` | in-memory |
+| RETAIL_CATALOG_PERSISTENCE_ENDPOINT | Database Endpoint URL | "" |
+| RETAIL_CATALOG_PERSISTENCE_DB_NAME | Database Name | catalogdb |
+| RETAIL_CATALOG_PERSISTENCE_USER | Database User | catalog_user |
+| RETAIL_CATALOG_PERSISTENCE_PASSWORD | Database Password | "" |
+| RETAIL_CATALOG_PERSISTENCE_CONNECT_TIMEOUT=5 | Database connection timeout in sec | 5 |
 

@@ -6,14 +6,14 @@ variable "aws_region" {
 variable "env_name" {
   description = "Environment name used in resource names and tags"
   type        = string
-  default     = "dev"
+  default     = "test"
 }
 
 # EKS Cluster Configurations Vars
 
 variable "cluster_name" {
   type    = string
-  default = "eksdemo_bhavin"
+  # default = "eksdemo_bhavin"
 }
 
 variable "cluster_version" {
@@ -44,14 +44,14 @@ variable "cluster_endpoint_public_access_cidrs" {
 
 variable "tags" {
   type = map(string)
-  default = {
-    Department   = "PES_IA"
-    Owner        = "bhavin.bhavsar@einfochips.com"
-    End_Date     = "4 May 2026"
-    Project_Name = "EIC_Internal"
-    DM           = "Sachin.Shah1@einfochips.com"
+  # default = {
+  #   Department   = "PES_IA"
+  #   Owner        = "bhavin.bhavsar@einfochips.com"
+  #   End_Date     = "4 May 2026"
+  #   Project_Name = "EIC_Internal"
+  #   DM           = "Sachin.Shah1@einfochips.com"
 
-  }
+  # }
 }
 
 variable "environment_name" {
@@ -60,3 +60,21 @@ variable "environment_name" {
 }
 
 
+# NodeGroup Woker Nodes Vars
+
+variable "node_instance_types" {
+  type = list(string)
+  default = ["t3.medium"]
+}
+
+variable "node_capacity_type" {
+  description = "Instance capacity type: ON_DEMAND or SPOT"
+  type        = string
+  default     = "ON_DEMAND"
+}
+
+variable "node_root_disk_size" {
+  description = "Disk size in GiB for worker nodes"
+  type        = number
+  # default     = 25
+}

@@ -14,8 +14,12 @@ output "vpc_id" {
   value = data.terraform_remote_state.vpc.outputs.vpc_id
 }
 
-output "pvt_sub_id" {
-  value = data.terraform_remote_state.vpc.outputs.pvt_sub_id
+# output "pvt_sub_id" {
+#   value = data.terraform_remote_state.vpc.outputs.pvt_sub_id
+# }
+
+output "aws_private_sub_id" {
+    value = data.terraform_remote_state.vpc.outputs.aws_private_sub_id
 }
 
 output "pub_sub_id" {

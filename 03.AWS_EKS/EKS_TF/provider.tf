@@ -10,7 +10,7 @@ terraform {
   # Setup S3 Remote Backend
   backend "s3" {
     bucket       = "bhavindemo-s3-tfstate-test-qde617"
-    key          = "test/terraform.tfstate"
+    key          = "eks/terraform.tfstate"
     region       = "ap-south-1"
     encrypt      = true
     use_lockfile = true

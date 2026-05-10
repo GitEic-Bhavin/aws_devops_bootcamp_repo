@@ -10,7 +10,7 @@ resource "aws_eks_cluster" "main" {
 
     vpc_config {
 
-        subnet_ids = data.terraform_remote_state.vpc.outputs.pub_sub_id
+        subnet_ids = data.terraform_remote_state.vpc.outputs.aws_private_sub_id
 
       # Create eks cluster endpoint as public for testing
         endpoint_public_access = var.cluster_endpoint_public_access
@@ -41,7 +41,7 @@ resource "aws_eks_cluster" "main" {
     tags = var.tags
 
     access_config {
-      authentication_mode = "API_AND_CONFIG_MAp" # We have 3 options: CONFIG_MAP, API, API_AND_CONFIG_MAP
+      authentication_mode = "API_AND_CONFIG_MAP" # We have 3 options: CONFIG_MAP, API, API_AND_CONFIG_MAP
       bootstrap_cluster_creator_admin_permissions = true
     }
 }

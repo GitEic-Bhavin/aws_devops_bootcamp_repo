@@ -8,3 +8,5 @@
 02.Terraform/State_Management/terraform.tfstate*
 02.Terraform/State_Management/s3_backend/.terraform*
 02.Terraform/State_Management/s3_backend/terraform.tfstate*
+03.AWS_EKS/EKS_TF/.terraform*
+03.AWS_EKS/EKS_TF/terraform.tfstate*

@@ -1325,3 +1325,23 @@ spec:
 | RETAIL_CATALOG_PERSISTENCE_PASSWORD | Database Password | "" |
 | RETAIL_CATALOG_PERSISTENCE_CONNECT_TIMEOUT=5 | Database connection timeout in sec | 5 |
 
+
+- Once configmap created , now deployment of applications do.
+
+```bash
+kubectl apply -f configmap.yml
+
+kubectl apply -f catalog_deployments.yml
+```
+
+![alt text](cm.png)
+
+- Ensure all pods are runnning and its logs
+
+```bash
+kubectl get pods
+
+kubectl logs -f <pod_name>
+```
+
+![alt text](logscm.png)

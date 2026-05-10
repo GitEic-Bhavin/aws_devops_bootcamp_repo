@@ -29,8 +29,22 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1000
-          # image: "public.ecr.aws/aws-containers/retail-store-sample-catalog:1.0.0"
-          image: "bhavin1099/retail-store-sample-app:2.0.0"
+            # Adding ConfigMap as Env Here one by ones.
+            # env:
+            #   - name: RETAIL_CATALOG_PERSISTENCE_PROVIDER
+            #     valueFrom:
+            #       configMapKeyRef:
+            #         name: myapp
+            #         key: RETAIL_CATALOG_PERSISTENCE_PROVIDER
+
+            # Adding whole configmap as all env will requires 
+
+          envFrom:
+            - configMapRef:
+                name: myapp
+
+          image: "public.ecr.aws/aws-containers/retail-store-sample-catalog:1.0.0"
+          # image: "bhavin1099/retail-store-sample-app:2.0.0"
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

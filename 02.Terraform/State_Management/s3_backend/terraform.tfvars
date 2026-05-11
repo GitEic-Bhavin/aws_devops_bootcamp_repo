@@ -10,7 +10,8 @@ pub_sub_cidr_block = "10.0.11.0/24"
 pvt_sub_cidr_block = "10.0.111.0/24"
 
 # nat_gateway_name = ["Bootcamp-vpc-do-not-delete-nat"]
-nat_gateway_name = [ "Bhavin_NAT_Gateway" ]
+# nat_gateway_name = [ "Bhavin_NAT_Gateway" ]
+nat_gateway_name = [ "vanbor_NAT_GW" ]
 # nat_gateway_name = [ "kalpesh-demo" ]
 
 pub_sub_name = {

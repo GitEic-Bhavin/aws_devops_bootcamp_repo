@@ -1347,6 +1347,366 @@ kubectl logs -f <pod_name>
 ![alt text](logscm.png)
 
 
+Kubernetes StatefulSets
+---
+
+
+## The core problem: why Deployments fail for databases
+
+Imagine you're running MySQL with 1 master + 2 slaves. This setup has strict rules:
+
+- **Master is set up first**, then slaves clone from it
+- **Slaves must always know the master's hostname** to stay in sync
+- Each node plays a **different role** (master writes, slaves read-only)
+
+Now try doing this with a Kubernetes Deployment — it breaks in 3 ways:---
+
+![alt text](sfsw.png)
+
+## Breaking it down concept by concept
+
+**What is a stateful application?**
+An application that maintains *state* — meaning it needs to remember data, configurations, or its role across restarts. MySQL, PostgreSQL, Redis, Kafka are all examples. Regular microservices (your API servers, backends) are *stateless* — any pod can replace any other pod, they're all identical.
+
+**Why Deployments fail for MySQL master-slave:**
+
+The transcript nails three specific failures:
+- Pods all start at the same time → slave tries to clone from a master that isn't ready yet
+- Pod names like `mysql-x7f2p` are randomly generated → slave can't reliably connect to master
+- If the master crashes, Kubernetes gives the new pod a completely different name → the entire replication breaks
+
+**How StatefulSets fix all three:**
+
+- Pods start one by one, in order — `mysql-0` must be `Running` and `Ready` before `mysql-1` is even created
+- Each pod gets a name based on an ordinal index: `<statefulset-name>-0`, `<statefulset-name>-1`, etc. — always predictable
+- When a pod crashes and restarts, it gets the **exact same name back** — `mysql-0` will always be `mysql-0`
+
+**Deletion is the reverse of creation:**
+
+This is intentional and smart. If you delete the StatefulSet, it removes `mysql-2` first, then `mysql-1`, and finally `mysql-0`. The master is always the last to go — giving slaves time to shut down cleanly first.
+
+
+Kubernetes Headless Service
+---
+
+![alt text](hlsv.png)
+
+### First — why can't we just use ClusterIP?
+
+You already know from the previous lecture that StatefulSet pods have different *roles*. `mysql-0` is the **master** (accepts reads + writes), while `mysql-1` and `mysql-2` are **slaves** (read only).
+
+A ClusterIP service does **load balancing** — it randomly forwards each request to any of the 3 pods. So when your app sends a **write request**, it might land on a slave. Slave says "sorry, I don't accept writes" → **your write fails, data is lost.**
+
+> ClusterIP is great for stateless apps (all pods are identical). For stateful apps with different roles — it's the wrong tool.
+
+---
+
+### What about pointing directly to a Pod IP?
+
+The transcript explores this and closes the door:
+
+- Pod IP like `10.0.2.24` → pod crashes → Kubernetes gives the new pod a **different IP** like `10.0.2.36` → your app is now pointing to a dead address
+- Pod DNS name is built from the IP (`10-0-2-24.default.pod.cluster.local`) → IP changes → DNS name changes too
+
+So both options break the moment a pod restarts. All doors are closed.
+
+---
+
+### The solution — Headless Service
+
+A Headless Service is a Kubernetes service with **one special line** added:
+
+```yaml
+spec:
+  clusterIP: None    # ← this single line makes it headless
+```
+
+That's literally it. Everything else is the same as a ClusterIP service. But this one change completely transforms what the service does:
+
+| | ClusterIP | Headless |
+|---|---|---|
+| Has a virtual IP? | Yes | No |
+| Does load balancing? | Yes | No |
+| DNS per pod? | No | **Yes** |
+
+---
+
+### What "DNS per pod" actually means
+
+This is the core superpower. When you create a Headless Service, Kubernetes automatically creates a **unique, stable DNS entry for every single pod** in the format:
+
+```
+<pod-name>.<headless-service-name>.<namespace>.svc.cluster.local
+```
+
+So for your MySQL StatefulSet with a headless service named `mysql-h`:
+
+```
+mysql-0.mysql-h.default.svc.cluster.local  ← always the MASTER
+mysql-1.mysql-h.default.svc.cluster.local  ← always slave 1
+mysql-2.mysql-h.default.svc.cluster.local  ← always slave 2
+```
+
+These DNS names are **stable** — even if `mysql-0` crashes and restarts, it comes back with the same name `mysql-0` (StatefulSet guarantee from the last lecture), so its DNS name stays the same too. The slaves always know exactly where the master is.
+
+---
+
+### How apps use this
+
+- **Catalog App** (needs writes) → hardpoints to `mysql-0.mysql-h.default.svc.cluster.local` → always hits the master
+- **App 2 / App 3** (read-only) → point to `mysql-1...` or `mysql-2...` → always hit the slaves
+
+No guessing. No load balancing surprises. Each app controls exactly which pod it talks to.
+
+---
+
+### The `serviceName` glue in StatefulSet YAML
+
+The transcript ends with an important detail. In your StatefulSet manifest, there's a field called `serviceName`. You set it to your headless service name:
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: "mysql-h"   # ← ties this StatefulSet to the headless service
+  replicas: 3
+  ...
+```
+
+- This is how Kubernetes knows *which* headless service to use for generating the DNS names. Without this link, the pod-level DNS entries won't be created.
+
+## Kubernetes StateFulSets
+
+
+### Step 1: Update / Create ConfigMap for MySql Connections
+
+```bash
+# Create configmap to used by pod and deployments
+# Instead of passing env we will use this configmap.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # name: myapp
+  name: catalog
+  
+data:
+  RETAIL_CATALOG_PERSISTENCE_PROVIDER: "mysql"
+  RETAIL_CATALOG_PERSISTENCE_ENDPOINT: "catalog-mysql-0.catalog-mysql.default.svc.cluster.local"
+  RETAIL_CATALOG_PERSISTENCE_DB_NAME: "catalogdb"
+  RETAIL_CATALOG_PERSISTENCE_USER: "catalog_user"
+  RETAIL_CATALOG_PERSISTENCE_PASSWORD: "kalyandb101"
+  RETAIL_CATALOG_PERSISTENCE_CONNECT_TIMEOUT: "5"
+```
+
+### Step 2: Create Headless Service
+
+- Keep `spec: ClusterIP: None`
+
+```bash
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-mysql
+  labels:
+    app.kubernetes.io/name: catalog
+    app.kubernetes.io/instance: catalog
+    app.kubernetes.io/component: mysql
+    app.kubernetes.io/owner: retail-store-sample
+spec:
+  clusterIP: None
+  ports:
+    - port: 3306
+      targetPort: mysql
+      name: mysql
+  selector:
+    app.kubernetes.io/name: catalog
+    app.kubernetes.io/instance: catalog
+    app.kubernetes.io/component: mysql
+    app.kubernetes.io/owner: retail-store-sample
+```
+
+- `Headless Service enables stable DNS names like catalog-mysql-0.catalog-mysql.default.svc.cluster.local`.
+
+### Step 3: Create StateFulSets
+
+```bash
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: catalog-mysql
+  labels:
+    app.kubernetes.io/name: catalog
+    app.kubernetes.io/instance: catalog
+    app.kubernetes.io/component: mysql
+    app.kubernetes.io/owner: retail-store-sample
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: catalog
+      app.kubernetes.io/instance: catalog
+      app.kubernetes.io/component: mysql
+      app.kubernetes.io/owner: retail-store-sample
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: catalog
+        app.kubernetes.io/instance: catalog
+        app.kubernetes.io/component: mysql
+        app.kubernetes.io/owner: retail-store-sample
+    spec:
+      containers:
+        - name: mysql
+          image: "public.ecr.aws/docker/library/mysql:8.0"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: my-secret-pw
+            - name: MYSQL_DATABASE
+              value: catalogdb
+            - name: MYSQL_USER
+              value: catalog_user
+            - name: MYSQL_PASSWORD
+              value: kalyandb101
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: data
+          emptyDir: {}`
+```
+
+- Deploy all manifests
+
+```bash
+kubectl apply -f StateFulSet_HeadLess/
+```
+
+### Step 4: Ensure Catalog app connected to MySQL Database which is StateFulSets
+
+```bash
+kubectl logs -f deployment/catalog
+```
+
+![alt text](logsd.png)
+
+### Step 5: Ensure DNS Resolutions 
+
+```bash
+kubectl run dns-test --image=busybox:1.28 -it --rm
+
+nslookup <StateFulSets_Svc>
+nslookup catalog-mysql
+```
+
+![alt text](dnst.png)
+
+
+### Step 6: ScaleUP - for StateFulSets how Ordering Creates
+
+```bash
+kubectl scale statefulset catalog-mysql --replicas=3
+kubectl get pods -w
+```
+
+![alt text](ssts.png)
+
+- It's ordering flow is
+
+```bash
+catalog-mysql-0 → catalog-mysql-1 → catalog-mysql-2
+```
+
+### Step 7: How Ordering flow for Delete / Scale Downs
+
+```bash
+kubectl scale statefulset catalog-myslq --replicas=1
+```
+
+- It is like this
+
+```bash
+catalog-mysql-2 → catalog-mysql-1 → catalog-mysql-0
+```
+
+![alt text](sdsts.png)
+
+
+**NOTE: StatefulSet Scaling ≠ MySQL Replication**
+
+- `Scaling MySQL StatefulSet to multiple replicas only creates independent MySQL servers. Kubernetes does not configure replication automatically`.
+
+- To build master–replica replication, you’d need:
+
+  - Custom init scripts or sidecar containers
+
+  - Commands like CHANGE MASTER TO and START SLAVE;
+
+  - Or use Bitnami MySQL Helm Chart, which sets up replication automatically.
+
+- `StatefulSet gives identity and stability; replication logic must be handled separately`.
+
+### Step 8: Verify Database Connection Inside Cluster
+
+#### Step 8.1 Connect Using MySQL Client Pod
+
+```bash
+kubectl run mysql-client --rm -it \
+  --image=mysql:8.0 \
+  --restart=Never \
+  -- mysql -h catalog-mysql -u catalog_user -p
+```
+
+#### Step 8.2 Run SQL Commands
+
+```bash
+SHOW DATABASES;
+```
+
+![alt text](sdbs.png)
+
+```bash
+USE catalogdb;
+SHOW TABLES;
+```
+
+![alt text](st.png)
+
+
+```bash
+SELECT * FROM products;
+SELECT * FROM tags;
+SELECT * FROM product_tags;
+EXIT;
+```
+
+![alt text](pttg.png)
+
+### Step 9: Access Applications
+
+```bash
+kubectl port-forward svc/catalog-service 7070:8080
+
+http://localhost:7070/topology
+```
+
+![alt text](dt.png)
+
+
+
+
+
+
+########################
+
+
 Kubernetes Secrets
 ---
 

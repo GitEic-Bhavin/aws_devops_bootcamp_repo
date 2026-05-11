@@ -1,0 +1,16 @@
+# Create configmap to used by pod and deployments
+# Instead of passing env we will use this configmap.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # name: myapp
+  name: catalog
+  
+data:
+  RETAIL_CATALOG_PERSISTENCE_PROVIDER: "mysql"
+  RETAIL_CATALOG_PERSISTENCE_ENDPOINT: "catalog-mysql-0.catalog-mysql.default.svc.cluster.local"
+  RETAIL_CATALOG_PERSISTENCE_DB_NAME: "catalogdb"
+  RETAIL_CATALOG_PERSISTENCE_USER: "catalog_user"
+  RETAIL_CATALOG_PERSISTENCE_PASSWORD: "kalyandb101"
+  RETAIL_CATALOG_PERSISTENCE_CONNECT_TIMEOUT: "5"

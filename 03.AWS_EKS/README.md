@@ -1345,3 +1345,109 @@ kubectl logs -f <pod_name>
 ```
 
 ![alt text](logscm.png)
+
+
+Kubernetes Secrets
+---
+
+- A Secret is an object that contains a small amount of **sensitive data** such as a `password`, `a token`, or `a key`. 
+
+- Such information might otherwise be put in a Pod specification or in a container image. 
+
+- Using a Secret means that you don't need to include confidential data in your application code.
+
+- We are storing secrets like `DB USER NAME`, `DB PASSWD` in a secrets bcz of secrets can encryption at rest of this secrets data.
+
+- By configuring etcd to use tsl/ssl cert to encrypt/decrypt secrets itself.
+
+- Secrets stores bydefault `unencrypted` in the API server's underlying data stored in `etcd`.
+
+- Anyone can access , retrive or modify a Secrets if they have access to `etcd`.
+
+- **If a use has `Permission to create Pod/Deployment inside a namespace`, they can effectively indirectly access all Secrets in that namespace - Even if RBAC doesn't Explictily allow `get secrets`**.
+
+**But Why user can access and read all secrets even RBAC Restrict to get secrets ?**
+
+- `Bcz of Pods/Deployments can mount or consume Secrets`.
+
+```yml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: secret-reader
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command: ["sleep", "3600"]
+
+    env:
+    - name: DB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: db-secret
+          key: password
+```
+
+**Kubernetes does this**
+
+  - 1. API Server validates pod
+  - 2. Schedular schedules pod
+  - 3. Kubelet pull secrets from etcd
+  - 4. Secret injected into container env vars.
+
+- `User can access pod and execute all commands`
+
+```bash
+kubectl exec -it <pod_name> -- sh
+
+# Now User can Read Secrets by this way inside pods
+echo $DB_PASSWORD
+```
+
+- User didn't execute kubectl get secrets even they can read secretes by accessing Pod
+
+**Why Deployment Permissions == All Secrets Access to that Users**
+
+```bash
+User creates Deployment
+        ↓
+Deployment creates ReplicaSet
+        ↓
+ReplicaSet creates Pod
+        ↓
+Pod mounts Secret
+        ↓
+User exec into pod
+        ↓
+User reads secret
+```
+
+### Secrets can exposed by anyone by ServiceAccount Tokens
+
+- Even if no Secrets mounted manually or in a volumes to stores secrets
+
+- Pods automatically get `ServiceAccount Tokens`.
+
+- That ServiceAccount Token may allows:
+
+  - API Access
+  - Secrets Access
+  - Cluster reconnaissance
+
+- **Unless and Unless you didn't configure `automountServiceAccountToken: false`**.
+
+### Best Practices for K8S Secrets
+
+1. Alway use Separate NameSpaces
+
+2. Use RBAC to Restrict Pod/Deployment Creations
+
+3. Use Carefully RBAC espacially for `verbs: - "*"`
+
+4. Use External Secret Manager 
+
+  - HashiCorp Vault
+  - AWS Secret Manager
+  - Azure Key Vault
+

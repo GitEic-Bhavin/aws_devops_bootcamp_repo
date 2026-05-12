@@ -1700,13 +1700,6 @@ http://localhost:7070/topology
 ![alt text](dt.png)
 
 
-
-
-
-
-########################
-
-
 Kubernetes Secrets
 ---
 
@@ -1810,4 +1803,70 @@ User reads secret
   - HashiCorp Vault
   - AWS Secret Manager
   - Azure Key Vault
+
+## Secret Deployments
+
+### Step 1: Create Secrets
+
+```yml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysecret-mysql
+type: Opaque
+data:
+  RETAIL_CATALOG_PERSISTENCE_USER: Y2F0YWxvZ191c2Vy
+  RETAIL_CATALOG_PERSISTENCE_PASSWORD: QmhhdmluQDEyMw==
+  RETAIL_CATALOG_PERSISTENCE_ENDPOINT: "Y2F0YWxvZy1teXNxbC0wLmNhdGFsb2ctbXlzcWwuZGVmYXVsdC5zdmMuY2x1c3Rlci5sb2NhbA=="
+  RETAIL_CATALOG_PERSISTENCE_DB_NAME: "Y2F0YWxvZ2Ri"
+```
+
+### Step 2: Create ConfigMap
+
+```yml
+# Create configmap to used by pod and deployments
+# Instead of passing env we will use this configmap.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # name: myapp
+  name: catalog
+  
+data:
+  RETAIL_CATALOG_PERSISTENCE_PROVIDER: "mysql"
+  # RETAIL_CATALOG_PERSISTENCE_ENDPOINT: "catalog-mysql-0.catalog-mysql.default.svc.cluster.local"
+  # RETAIL_CATALOG_PERSISTENCE_DB_NAME: "catalogdb"
+  # RETAIL_CATALOG_PERSISTENCE_USER: "catalog_user"
+  # RETAIL_CATALOG_PERSISTENCE_PASSWORD: "kalyandb101"
+  RETAIL_CATALOG_PERSISTENCE_CONNECT_TIMEOUT: "5"
+```
+
+### Step 3: Refer Secrets in Statefulsets
+
+![alt text](scsts.png)
+
+### Step 4: Refer ConfigMap and Secrets in Deployment
+
+![alt text](sccmdp.png)
+
+
+### Step 5: Apply manifests
+
+```bash
+kubectl apply -f Secrets/
+```
+
+### Step 6: Access Applications
+
+```bash
+kubectl port-forward deployment/catalog 7070:8080
+```
+
+![alt text](pfwd.png)
+
+- Check endpoints
+
+![alt text](chep.png)
+
 

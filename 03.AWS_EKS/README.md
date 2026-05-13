@@ -2344,3 +2344,330 @@ No Kubernetes Secret required.
 
 - `Helm Repository` - Most of all tools are available on helm repos, so you wouldn't required to write `templates`, `values.yml`, `evn.yml`, `manifests`.
 
+
+
+Install AWS Secrets and Configuration Provider (ASCP) for Amazon EKS
+---
+
+## Step 1: Install Helm 
+
+```bash
+# Install Helm CLI
+brew install helm
+
+sudo apt-get update
+sudo apt-get install helm
+
+# Get helm version
+helm version
+```
+
+## Step 2: Add Helm Repositories
+
+```bash
+# Add Helm Repositories
+
+# Add AWS Secret CSI Driver helm repo
+helm repo add secrets-store-csi-driver https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
+
+# Add AWS ASCP helm repo
+helm repo add aws-secrets-manager https://aws.github.io/secrets-store-csi-driver-provider-aws
+helm repo update
+
+# List Helm Repos
+helm repo list
+```
+
+## Step 3: Install the Secrets Store CSI Driver
+
+- Install AWS Secret Store CSI Driver to mount ext secrets into a pod.
+
+```bash
+# Install the Secrets Store CSI Driver in the kube-system namespace:
+helm install csi-secrets-store \
+  secrets-store-csi-driver/secrets-store-csi-driver \
+  --namespace kube-system \
+  --set tokenRequests[0].audience="pods.eks.amazonaws.com"
+
+# List all Helm releases across namespaces:
+helm list --all-namespaces
+
+# List releases only in the kube-system namespace:
+helm list -n kube-system
+
+# Verify installation status, pods, and resources created by the release:
+helm status csi-secrets-store -n kube-system
+
+
+# Verify pods:
+kubectl get pods -n kube-system -l app=secrets-store-csi-driver
+```
+
+![alt text](isscd.png)
+
+
+### What Are We Trying to Do?
+
+You have an app running in a **Kubernetes Pod** on EKS. That app needs a **secret** (like a database password) stored in **AWS Secrets Manager**.
+
+The **Secrets Store CSI Driver** is the bridge — it fetches that secret and mounts it inside your pod like a file.
+
+But there's a problem first...
+
+### The Core Problem: "Who Are You?"
+
+Before AWS gives any secret, it asks:
+> **"Prove you are allowed to access this."**
+
+Your pod needs to **authenticate itself to AWS**. This is done using **EKS Pod Identity** — a modern AWS feature that lets pods assume IAM roles.
+
+### What is a Token & What is `aud` (Audience)?
+
+Kubernetes can generate a **JWT token** for any pod. Think of it like an **ID badge**.
+
+But every ID badge is made **for a specific building/purpose**. That's what the `aud` (audience) field means:
+
+> **"This badge is valid ONLY for this specific place."**
+
+| Token Audience | Valid For |
+|---|---|
+| `kubernetes.default.svc` | Kubernetes API only |
+| `pods.eks.amazonaws.com` | AWS EKS Pod Identity ✅ |
+
+If you show an AWS badge to the Kubernetes API, it gets rejected — and vice versa.
+
+### The Real Flow
+
+```
+Your Pod needs a secret
+        ↓
+CSI Driver says: "I need to talk to AWS"
+        ↓
+CSI Driver requests a token from Kubernetes
+(with audience = pods.eks.amazonaws.com)
+        ↓
+Kubernetes creates the JWT token 🎟️
+        ↓
+CSI Driver sends token → AWS Pod Identity Agent
+        ↓
+AWS verifies: "Yes, this token is meant for me ✅"
+        ↓
+AWS returns temporary IAM credentials
+        ↓
+CSI Driver fetches secret from Secrets Manager
+        ↓
+Secret is mounted inside your pod 🎉
+```
+
+### The Critical Line Explained
+
+```bash
+--set tokenRequests[0].audience="pods.eks.amazonaws.com"
+```
+
+This Helm config tells the CSI Driver:
+
+> *"When you need to talk to AWS, request a Kubernetes token that is specifically addressed to AWS Pod Identity."*
+
+Without this line:
+- CSI Driver gets a generic Kubernetes token
+- AWS sees a token not meant for it → **Rejects it**
+- Your secret **never gets mounted** → Pod fails 
+
+### Common Beginner Mistakes
+
+| Mistake | What Happens |
+|---|---|
+| Missing `tokenRequests` config | Pod Identity auth fails |
+| No IAM Role attached | Even with right token, access denied |
+| No Pod Identity Association in EKS | AWS doesn't know which role to give |
+
+## Step 4: Install the AWS Secrets and Configuration Provider (ASCP)
+
+### Step 4.1  Install the AWS Provider
+
+```bash
+# Install the AWS Secrets Manager CSI Driver Provider in the kube-system namespace.
+helm install secrets-provider-aws \
+  aws-secrets-manager/secrets-store-csi-driver-provider-aws \
+  --namespace kube-system \
+  --set secrets-store-csi-driver.install=false
+
+# List installed Helm Releases
+helm list -n kube-system
+
+# Inspect the AWS provider Helm release:
+helm status secrets-provider-aws -n kube-system
+```
+
+![alt text](iscdsopd.png)
+
+
+### Step 4.2 Verify Installation and deamonset
+
+```bash
+# CSI driver pods
+kubectl get pods -n kube-system -l app=secrets-store-csi-driver
+
+# AWS provider (ASCP) pods
+kubectl get pods -n kube-system -l app=secrets-store-csi-driver-provider-aws
+```
+
+![alt text](vfds.png)
+
+
+
+Create IAM Role, Policy and EKS Pod Identity Association
+---
+
+**What we will learns**
+
+  - Export and verify key AWS environment variables.
+
+  - Create an IAM policy allowing Pods to read a specific AWS secret.
+
+  - Create an IAM role trusted by the EKS Pod Identity Agent.
+
+  - Attach the policy to the role.
+  
+  - Associate that IAM role with the Kubernetes ServiceAccount (catalog-mysql-sa).
+
+  - Verify the Pod Identity association.
+
+## Step 1: Export Env Vars
+
+```bash
+# Replace the placeholders below with your actual values
+export AWS_REGION="us-east-1"
+export EKS_CLUSTER_NAME="retail-dev-eksdemo1"
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+```
+
+## Step 2: Create an IAM Least Priviledge policy allowing Pods to read a specific AWS secret
+
+
+- Create privileged IAM Policy of Secret Manager
+
+```bash
+cat <<EOF > catalog-db-secret-policy.json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+      ],
+      "Resource": "arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:Bhavin_EKS_catalog-db-secret*"
+    }
+  ]
+}
+EOF
+```
+
+- Create IAM Policy 
+
+```bash
+# Create IAM Policy
+aws iam create-policy \
+  --policy-name Bhavin_EKS_catalog-db-secret-policy \
+  --policy-document file://catalog-db-secret-policy.json
+```
+
+## Step 3: Create IAM Role Trust Policy for Pod Identity
+
+- Create the trust policy that allows EKS Pods to assume this role through the Pod Identity Agent.
+
+```bash
+cat <<EOF > trust-policy.json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "pods.eks.amazonaws.com"
+      },
+      "Action": [
+        "sts:AssumeRole",
+        "sts:TagSession"
+      ]
+    }
+  ]
+}
+EOF
+```
+
+- Create IAM Roles of this roles
+
+```bash
+# Create IAM Role
+aws iam create-role \
+  --role-name Bhavin_EKS_catalog-db-secrets-role \
+  --assume-role-policy-document file://trust-policy.json
+```
+
+- `Attach the policy to the role` which will create a final role which will have trust policy as `pods.eks.amazonaws.com` and permissions of least priviledge of secret managers.
+
+
+
+```bash
+# Attach the IAM policy to IAM Role
+aws iam attach-role-policy \
+  --role-name Bhavin_EKS_catalog-db-secrets-role \
+  --policy-arn arn:aws:iam::${AWS_ACCOUNT_ID}:policy/Bhavin_EKS_catalog-db-secret-policy
+
+```
+
+```bash
+# List Attached Policies to IAM Role
+aws iam list-attached-role-policies --role-name Bhavin_EKS_catalog-db-secrets-role
+```
+
+## Create Pod Identity Association
+
+- We will use this IAM Role into this Pod Associations with service account named `catalog-mysql-sa`, so the MySQL StatefulSet can access the secret.
+
+```bash
+# Create Pod Identity Association
+aws eks create-pod-identity-association \
+  --cluster-name ${EKS_CLUSTER_NAME} \
+  --namespace default \
+  --service-account catalog-mysql-sa \
+  --role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/Bhavin_EKS_catalog-db-secrets-role
+```
+
+Integrate AWS Secrets Manager with Catalog Microservice (EKS Pod Identity)
+---
+
+## Step 1: Create AWS Secret Manager
+
+```bash
+export AWS_REGION="ap-south-1"
+
+# Create Secret 
+aws secretsmanager create-secret \
+  --name Bhavin_EKS_catalog-db-secret \
+  --region $AWS_REGION \
+  --description "MySQL credentials for Catalog microservice" \
+  --secret-string '{
+      "MYSQL_USER": "mydbadmin",
+      "MYSQL_PASSWORD": "kalyandb101"
+  }'
+```
+
+- Describe and retrive Secrets
+
+```bash
+# Describe the Secret for Details
+aws secretsmanager describe-secret \
+  --secret-id Bhavin_EKS_catalog-db-secret \
+  --region $AWS_REGION
+
+# Retrieve Secret Value (for testing only)
+aws secretsmanager get-secret-value \
+  --secret-id Bhavin_EKS_catalog-db-secret \
+  --region $AWS_REGION \
+  --query SecretString --output text
+```

@@ -1399,18 +1399,63 @@ A ClusterIP service does **load balancing** — it randomly forwards each reques
 
 > ClusterIP is great for stateless apps (all pods are identical). For stateful apps with different roles — it's the wrong tool.
 
----
+[k8s headless svc docs]("https://kubernetes.io/docs/concepts/services-networking/service/")
+
+- `For headless Services, a cluster IP is not allocated, kube-proxy does not handle these Services, and there is no load balancing or proxying done by the platform for them.`
+
+- A headless Service allows a client to connect to whichever Pod it prefers, directly. 
+
+- Services that are `headless don't configure routes and packet forwarding` using virtual IP addresses and proxies; instead, headless Services `report the endpoint IP addresses of the individual pods via internal DNS records`, served through the cluster's DNS service. 
+
+- To define a headless Service, you make a Service with `.spec.type` set to ClusterIP (which is also the default for type), and you additionally set `.spec.clusterIP` to None.
+
+### With selectors
+
+- For headless Services that define selectors, the endpoints controller creates EndpointSlices in the Kubernetes API, and modifies the DNS configuration to return A or AAAA records (IPv4 or IPv6 addresses) that point directly to the Pods backing the Service.
+
+```yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  clusterIP: None
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+```
+
+## What happens internally ?
+
+### 1. EndPointSlice Created Automatically
+
+- K8S Controller sees selectors `app: mysql` 
+
+- So it will automaically creates **EndPointSlice** or **Endpoint** like Pods IP from a cluster's IP.
+
+### 2. DNS Returns Pods IP Directly
+
+```bash
+nslookup mysql.default.svc.cluster.local
+```
+
+- It Returns
+
+```bash
+10.1.1.5
+10.1.1.6
+10.1.1.7
+```
+
 
 ### What about pointing directly to a Pod IP?
 
-The transcript explores this and closes the door:
 
 - Pod IP like `10.0.2.24` → pod crashes → Kubernetes gives the new pod a **different IP** like `10.0.2.36` → your app is now pointing to a dead address
 - Pod DNS name is built from the IP (`10-0-2-24.default.pod.cluster.local`) → IP changes → DNS name changes too
 
 So both options break the moment a pod restarts. All doors are closed.
-
----
 
 ### The solution — Headless Service
 
@@ -1449,16 +1494,12 @@ mysql-2.mysql-h.default.svc.cluster.local  ← always slave 2
 
 These DNS names are **stable** — even if `mysql-0` crashes and restarts, it comes back with the same name `mysql-0` (StatefulSet guarantee from the last lecture), so its DNS name stays the same too. The slaves always know exactly where the master is.
 
----
-
 ### How apps use this
 
 - **Catalog App** (needs writes) → hardpoints to `mysql-0.mysql-h.default.svc.cluster.local` → always hits the master
 - **App 2 / App 3** (read-only) → point to `mysql-1...` or `mysql-2...` → always hit the slaves
 
 No guessing. No load balancing surprises. Each app controls exactly which pod it talks to.
-
----
 
 ### The `serviceName` glue in StatefulSet YAML
 
@@ -1472,7 +1513,6 @@ metadata:
 spec:
   serviceName: "mysql-h"   # ← ties this StatefulSet to the headless service
   replicas: 3
-  ...
 ```
 
 - This is how Kubernetes knows *which* headless service to use for generating the DNS names. Without this link, the pod-level DNS entries won't be created.
@@ -1869,4 +1909,438 @@ kubectl port-forward deployment/catalog 7070:8080
 
 ![alt text](chep.png)
 
+
+EKS Pod Identity Agent
+---
+
+- EKS Cluster Pods can able to communicate with AWS Services (OutSide of EKS) like S3, DynamoDB, SQS etc.
+
+- How EKS Pods will able to do this ?
+
+- By `Pod Identity Agent`.
+
+How to Implement Pod Identity Agent ?
+---
+
+![alt text](ipia.png)
+
+
+# What is an aws-cli-pod?
+
+- An aws-cli-pod is a standard Kubernetes Pod that runs an official image (like amazon/aws-cli or a custom image) which has the AWS CLI installed and configured.
+
+- Its typical configuration includes:
+
+    1. `**Image**`: An official AWS CLI container image.
+
+    2. `**IAM Role**`: The Pod is usually associated with an IAM Role for Service Accounts (IRSA). This grants the Pod the necessary AWS permissions (e.g., read/write S3, manage EC2, or interact with EKS itself) without needing to store static access keys.
+
+## 1. Create and Assign IAM Role to aws-cli Pod
+
+- We will create IAM ROLE for give access to S3 List,Read to our EKS `aws-cli pod`.
+
+## 2. Install Pod Identity Agent
+
+- We will Install Pod Identity Agent as `**DeamonSet**` to Run it in Each & Every Nodes available.
+
+## 3. Create Service Account
+
+- We will create Service Account for `aws-cli pod`.
+
+## 4. EKS Pod Identity Associations
+
+- We will do EKS Pod Identity Associations.
+
+
+## 1. Install Pod Identity Agent
+
+- Go to EKS > Add-ons > Search for "EKS Pod Identity" > Install it.
+
+![alt text](ekspiaadons.png)
+
+
+- It will install in `kube-sustem` namespace.
+
+![alt text](ns.png)
+
+
+- Varify it in kube-system namespace
+
+```bash
+kubectl get pods -n kube-system
+```
+
+![alt text](kspd.png)
+
+
+## 2. Deploy AWS CLI Pod (Without Pod Identity Associations)
+
+### 2.1 Create Service Account
+
+```yml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aws-cli-sa
+  namespace: default
+```
+
+### 2.2 Create AWS CLI Pod
+
+```yml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aws-cli
+  namespace: default
+
+spec:
+  serviceAccountName: aws-cli-sa
+  containers:
+    - name: aws-cli
+      image: amazon/aws-cli
+      command: ["sleep","infinity"]
+```
+
+- Create Sevice Account & AWS CLI Pod
+
+```bash
+kubectl create -f sa.yml
+
+kubectl create -f aws-cli.yml
+```
+
+![alt text](saawscli.png)
+
+
+### 3. Create and Assign IAM Role to aws-cli Pod
+
+- Go to Roles > EKS > EKS > Pod Identity
+
+![alt text](ekspir.png)
+
+
+
+- Choose S3 ReadOnly Permissions.
+
+### 4. EKS Pod Identity Associations
+
+- Go to EKS > Access > Create Pod Identity association 
+
+![alt text](piassociate.png)
+
+
+- Choose Name space and Service Account & Create.
+
+### 5. Try to list all s3 in aws-cli pods
+
+```bash
+kubectl exec -it aws-cli -- /bin/bash
+```
+
+![alt text](errorawscli.png)
+
+### 5.1 You have to Restart aws-cli Pods to load all changes
+
+```bash
+kubectl delete pods aws-cli
+
+kubectl create -f aws-cli.yml
+
+kubectl exec -it aws-cli -- /bin/bash
+```
+
+![alt text](access3.png)
+
+
+
+################
+
+# Retail Store Sample - Secure Secrets Management with AWS Secrets Manager + EKS Pod Identity
+
+## Overview
+
+This project demonstrates how to securely manage MySQL database credentials in an Amazon EKS cluster using:
+
+* Amazon EKS
+* AWS Secrets Manager
+* EKS Pod Identity
+* Secrets Store CSI Driver
+* AWS Secrets and Configuration Provider (ASCP)
+* Kubernetes Deployment & StatefulSet
+
+Instead of storing database credentials inside Kubernetes Secrets, this architecture stores secrets securely in AWS Secrets Manager and dynamically mounts them into Kubernetes Pods at runtime.
+
+---
+
+# Problem with Traditional Kubernetes Secrets
+
+In traditional Kubernetes setups:
+
+```text
+Pod -> Kubernetes Secret -> etcd
+```
+
+Kubernetes Secrets are:
+
+* Base64 encoded (NOT encrypted by default)
+* Stored inside Kubernetes etcd
+* Accessible to users with cluster access
+* Difficult to rotate securely
+
+This creates security risks in production environments.
+
+---
+
+# Production-Grade Solution
+
+This architecture moves secrets outside Kubernetes into AWS Secrets Manager.
+
+```text
+Pod -> CSI Driver -> ASCP -> AWS Secrets Manager
+```
+
+Benefits:
+
+* Secrets never stored inside Kubernetes
+* IAM-based access control
+* Automatic secret rotation support
+* Temporary AWS credentials via Pod Identity
+* Zero-trust architecture
+* More secure production deployments
+
+---
+
+# Architecture Diagram
+
+```text
+┌───────────────────────────────┐
+│ AWS Secrets Manager           │
+│-------------------------------│
+│ username                      │
+│ password                      │
+│ database                      │
+│ endpoint                      │
+└──────────────┬────────────────┘
+               │
+               │ AWS API Call
+               ▼
+┌───────────────────────────────┐
+│ ASCP Provider                 │
+│ (AWS Secrets Provider)        │
+└──────────────┬────────────────┘
+               │
+               ▼
+┌───────────────────────────────┐
+│ Secrets Store CSI Driver      │
+└──────────────┬────────────────┘
+               │ Mount Secret
+               ▼
+┌───────────────────────────────┐
+│ Kubernetes Pod                │
+│ (Catalog Microservice)        │
+│                               │
+│ /mnt/secrets-store/password   │
+└───────────────────────────────┘
+```
+
+---
+
+# Core Components
+
+## 1. AWS Secrets Manager
+
+Stores sensitive credentials securely.
+
+Example secret:
+
+```json
+{
+  "username": "catalog_user",
+  "password": "Bhavin@123",
+  "database": "catalogdb",
+  "endpoint": "catalog-mysql"
+}
+```
+
+---
+
+## 2. EKS Pod Identity
+
+Provides secure authentication between Kubernetes Pods and AWS IAM.
+
+### Flow
+
+```text
+ServiceAccount
+      ↓
+Pod Identity Association
+      ↓
+IAM Role
+      ↓
+AWS Secrets Manager Access
+```
+
+Benefits:
+
+* No AWS credentials inside Pods
+* No OIDC management
+* Temporary AWS credentials
+* Fine-grained IAM permissions
+
+---
+
+## 3. Secrets Store CSI Driver
+
+A Kubernetes CSI plugin that mounts external secrets into Pods as files.
+
+Responsibilities:
+
+* Integrates with Kubernetes volumes
+* Mounts secrets into Pod filesystem
+* Works with external secret providers
+
+---
+
+## 4. AWS Secrets and Configuration Provider (ASCP)
+
+AWS-specific provider for CSI Driver.
+
+Responsibilities:
+
+* Authenticates to AWS
+* Calls AWS Secrets Manager APIs
+* Retrieves secrets securely
+* Returns secrets to CSI Driver
+
+---
+
+## 5. SecretProviderClass
+
+A Kubernetes Custom Resource Definition (CRD) that defines:
+
+* Which secret to fetch
+* Which provider to use
+* How secrets should be mounted
+
+Example:
+
+```yaml
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: aws-secrets
+spec:
+  provider: aws
+  parameters:
+    objects: |
+      - objectName: "catalog-mysql-secret"
+        objectType: "secretsmanager"
+```
+
+---
+
+# Complete Runtime Flow
+
+## Step 1 — Pod Starts
+
+Kubernetes creates the Catalog Pod.
+
+```text
+deployment/catalog
+```
+
+---
+
+## Step 2 — ServiceAccount Authentication
+
+The Pod runs using:
+
+```yaml
+serviceAccountName: catalog-sa
+```
+
+This ServiceAccount is mapped to an IAM Role using EKS Pod Identity.
+
+---
+
+## Step 3 — Pod Identity Agent Authenticates
+
+The EKS Pod Identity Agent verifies:
+
+```text
+"This pod is allowed to access AWS Secrets Manager"
+```
+
+No static AWS credentials are stored inside the cluster.
+
+---
+
+## Step 4 — CSI Driver Triggered
+
+When Kubernetes sees the CSI volume:
+
+```yaml
+volumes:
+  - name: secrets-store
+    csi:
+      driver: secrets-store.csi.k8s.io
+```
+
+It invokes the Secrets Store CSI Driver.
+
+---
+
+## Step 5 — ASCP Fetches Secret
+
+ASCP uses:
+
+* IAM Role permissions
+* AWS APIs
+
+to retrieve secrets from AWS Secrets Manager.
+
+---
+
+## Step 6 — Secret Mounted into Pod
+
+The CSI Driver mounts secrets into the container filesystem.
+
+Example:
+
+```text
+/mnt/secrets-store/username
+/mnt/secrets-store/password
+```
+
+---
+
+## Step 7 — Application Reads Secret
+
+The application reads secrets directly from mounted files.
+
+No Kubernetes Secret required.
+
+
+## Deploy by using HELM
+
+- Helm is a pkg manager of k8s
+
+- You can easily install, upgrade, update , rollout to your applications
+
+**Why we should use Helm ?**
+
+![alt text](helm.png)
+
+**Key Benifits**
+
+- `Reusability` - By using variables called `values.yml` files
+
+- `Versioning` 
+
+- `Release Management (Upgrade & Rollback)` - Easily manage by helm
+
+- `Packaging & Sharing` - Once helm chart is ready you can pkg it
+
+- `Helm Repository` - Most of all tools are available on helm repos, so you wouldn't required to write `templates`, `values.yml`, `evn.yml`, `manifests`.
 

@@ -2671,3 +2671,7 @@ aws secretsmanager get-secret-value \
   --region $AWS_REGION \
   --query SecretString --output text
 ```
+
+EBS_PV_PVC
+---
+

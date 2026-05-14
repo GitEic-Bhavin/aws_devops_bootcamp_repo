@@ -10,3 +10,5 @@
 02.Terraform/State_Management/s3_backend/terraform.tfstate*
 03.AWS_EKS/EKS_TF/.terraform*
 03.AWS_EKS/EKS_TF/terraform.tfstate*
+03.AWS_EKS/EKS_TF/Secret_Store_CSI_Driver/catalog-db-secret-policy.json  
+03.AWS_EKS/EKS_TF/Secret_Store_CSI_Driver/trust-policy.json

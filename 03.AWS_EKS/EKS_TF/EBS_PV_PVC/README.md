@@ -197,3 +197,69 @@ kubectl port-forward deployment/catalog 7070:8080
 
 ![alt text](accp.png)
 
+### Step 5: Set up MYSQL RDS Database
+
+
+
+### Step 6: Test connectivity to RDS DB from mysql-client
+
+```bash
+kubectl run mysql-client --rm -it \
+  --image=mysql:8.0 \
+  --restart=Never \
+  -- mysql -h <RDS_EP> -p
+
+# Enter Passwd
+```
+
+![alt text](conncrds.png)
+
+### Step 6: Create ExternalName service
+
+- Create `ExternalName` Service to connect to RDS DB.
+
+```yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-mysql
+spec:
+  type: ExternalName
+  externalName: <Your_RDS_EP>
+  ports:
+    - port: 3306
+```
+
+### Step 6: OR Update ConfigMap to use RDS EP
+
+```yml
+data:
+  RETAIL_CATALOG_PERSISTENCE_PROVIDER: "mysql"
+  RETAIL_CATALOG_PERSISTENCE_ENDPOINT: "<Your_RDS_EP>"
+ 
+```
+
+```bash
+kubectl apply -f configmap.yml
+```
+
+
+### Step 7: Ensure logs has migrated db to RDS DB
+
+```bash
+kubectl logs -f deploy/catalog
+```
+
+![alt text](dlogs.png)
+
+### Step 8: Deploy deployment / svc
+
+```bash
+kubectl rollout restart deployment/catalog
+
+kubectl port-forward svc/catalog-service 7070:8080
+```
+
+![alt text](rdsdata.png)
+
+

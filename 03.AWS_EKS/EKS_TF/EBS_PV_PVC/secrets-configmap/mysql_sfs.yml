@@ -10,6 +10,7 @@ metadata:
 spec:
   replicas: 2
   serviceName: catalog-mysql
+  # serviceName: catalog-mysql-rds
 
   selector:
     matchLabels:

@@ -149,7 +149,51 @@ volumeBindingMode: WaitForFirstConsumer
   - Replace `emptydir` with actual pv name
 
 
+### Step 3: Deploy it
+
+```bash
+kubectl apply -f secrets-config/
+```
+
+- Ensure pvc created itself for each of mysql statefulset pods
+
+![alt text](pvcp.png)
 
 
 
+### Step 4: Verify Database Persistence
+
+```bash
+kubectl run mysql-client --rm -it \
+  --image=mysql:8.0 \
+  --restart=Never \
+  -- mysql -h catalog-mysql -u mydbadmin -p
+
+# Database Password
+# Database Password: kalyandb101  
+```
+
+![alt text](logsqlp.png)
+
+
+- Ensure data is available using PV
+
+```bash
+SHOW DATABASES;
+USE catalogdb;
+SHOW TABLES;
+SELECT COUNT(*) FROM products;
+```
+
+
+![alt text](dtmysqlp.png)
+
+
+### Step 4: Access Data
+
+```bash
+kubectl port-forward deployment/catalog 7070:8080
+```
+
+![alt text](accp.png)
 

@@ -199,6 +199,60 @@ kubectl port-forward deployment/catalog 7070:8080
 
 ### Step 5: Set up MYSQL RDS Database
 
+- Create MySQL RDS SG 
+
+- Allow inbound 3306 from SG of EKS Nodes only
+
+- To find this EKS Nodes SG
+
+```bash
+aws eks describe-cluster \
+  --name $EKS_CLUSTER_NAME \
+  --query "cluster.resourcesVpcConfig.clusterSecurityGroupId" \
+  --output text
+
+# sg-"id...."
+```
+
+- In MySQL SG Inbound 3306 source - choose this `sg-id` of EKS Nodes SG.
+
+#### Step 5.1: Create DB Subnet Group (private subnets)
+
+RDS → Subnet groups → Create DB subnet group
+
+Name: <SG_RDS_NAME>
+
+VPC: Select the EKS VPC
+
+Subnets: Add all private subnets (at least 2 AZs)
+
+ 
+#### Step 5.2 Create RDS MySQL DB
+
+RDS → Databases → Create database
+
+Method: Standard create
+
+Engine: MySQL (8.0)
+
+Templates: Free tier or Dev/Test
+
+DB instance identifier: catalogdb
+
+Master username: catalog_user
+
+Master password: kalyandb101
+
+Instance class: db.t3.micro
+
+VPC: Your EKS VPC
+
+DB Subnet group: <Your_Pvt_SubnetGroup_RDS>
+
+Public access: No
+
+VPC security group: Choose existing → <Your_MySQL_SG>
+
 
 
 ### Step 6: Test connectivity to RDS DB from mysql-client

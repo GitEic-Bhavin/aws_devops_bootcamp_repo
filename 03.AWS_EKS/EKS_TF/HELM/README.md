@@ -616,3 +616,204 @@ helm status retail-ui-bhavin --show-resources
 helm uninstall retail-ui-bhavin
 ```
 
+RetailStore Application with Persistent Dataplane running on AWS EKS using Helm
+---
+
+- All component like UI, Cart, Checkout, Orders with its respected database like MySQL for statefulset, DynamoDB & Radis for Deployment, PostgreSQL, RabbitMQ for Orders in EKS.
+
+**Pre-Requisites**
+
+- EKS cluster + kubectl + Helm v3.8+ (OCI support)
+
+- AWS Load Balancer Controller installed (PIA set up)
+
+- Files present in 12-05-Helm-Retail-Store/retailstore-apps/:
+
+  - values-catalog.yaml,
+  - values-cart.yaml,
+  - values-checkout.yaml,
+  - values-orders.yaml,
+  - values-ui.yaml,
+  - install-retail-apps.sh,
+  - uninstall-retail-apps.sh
+
+**Goals**
+
+- Deploy Catalog, Cart, Checkout, Orders, UI via Helm.
+
+- Use the provided custom values per service.
+
+- Expose UI via Ingress (ALB, HTTP).
+
+### Step 1: Download Helm for all Apps Components
+
+- Execute script
+
+```bash
+cd retailstore-charts
+./download-and-untar-helm-charts.sh
+```
+
+- Run helm install one by one for all components
+
+```bash
+retailstore-charts/
+retailstore-charts/
+├── charts
+│   ├── retail-store-sample-cart-chart
+│   │   ├── Chart.yaml
+│   │   ├── templates
+│   │   │   ├── configmap.yaml
+│   │   │   ├── deployment.yaml
+│   │   │   ├── dynamodb-deployment.yaml
+│   │   │   ├── dynamodb-service.yaml
+│   │   │   ├── _helpers.tpl
+│   │   │   ├── hpa.yaml
+│   │   │   ├── NOTES.txt
+│   │   │   ├── pdb.yaml
+│   │   │   ├── serviceaccount.yaml
+│   │   │   ├── service.yaml
+│   │   │   └── tests
+│   │   │       └── test-connection.yaml
+│   │   └── values.yaml
+│   ├── retail-store-sample-catalog-chart
+│   │   ├── Chart.yaml
+│   │   ├── templates
+│   │   │   ├── configmap.yml
+│   │   │   ├── deployment.yaml
+│   │   │   ├── _helpers.tpl
+│   │   │   ├── hpa.yaml
+│   │   │   ├── mysql-service.yaml
+│   │   │   ├── mysql-statefulset.yaml
+│   │   │   ├── NOTES.txt
+│   │   │   ├── pdb.yaml
+│   │   │   ├── secret.yaml
+│   │   │   ├── security-group.yaml
+│   │   │   ├── serviceaccount.yaml
+│   │   │   ├── service.yaml
+│   │   │   └── tests
+│   │   │       └── test-connection.yaml
+│   │   └── values.yaml
+│   ├── retail-store-sample-checkout-chart
+│   │   ├── Chart.yaml
+│   │   ├── templates
+│   │   │   ├── configmap.yaml
+│   │   │   ├── deployment.yaml
+│   │   │   ├── _helpers.tpl
+│   │   │   ├── hpa.yaml
+│   │   │   ├── NOTES.txt
+│   │   │   ├── pdb.yaml
+│   │   │   ├── redis-deployment.yaml
+│   │   │   ├── redis-service.yaml
+│   │   │   ├── security-group.yaml
+│   │   │   ├── serviceaccount.yaml
+│   │   │   ├── service.yaml
+│   │   │   └── tests
+│   │   │       └── test-connection.yaml
+│   │   └── values.yaml
+│   ├── retail-store-sample-orders-chart
+│   │   ├── Chart.yaml
+│   │   ├── templates
+│   │   │   ├── configmap.yml
+│   │   │   ├── deployment.yaml
+│   │   │   ├── _helpers.tpl
+│   │   │   ├── hpa.yaml
+│   │   │   ├── NOTES.txt
+│   │   │   ├── pdb.yaml
+│   │   │   ├── postgresql-service.yaml
+│   │   │   ├── postgresql-statefulset.yaml
+│   │   │   ├── rabbitmq-secret.yaml
+│   │   │   ├── rabbitmq-service.yaml
+│   │   │   ├── rabbitmq-statefulset.yaml
+│   │   │   ├── secret-db.yaml
+│   │   │   ├── security-group.yaml
+│   │   │   ├── serviceaccount.yaml
+│   │   │   ├── service.yaml
+│   │   │   └── tests
+│   │   │       └── test-connection.yaml
+│   │   └── values.yaml
+│   └── retail-store-sample-ui-chart
+│       ├── Chart.yaml
+│       ├── README.md
+│       ├── templates
+│       │   ├── configmap.yml
+│       │   ├── deployment.yaml
+│       │   ├── _helpers.tpl
+│       │   ├── hpa.yaml
+│       │   ├── ingress.yaml
+│       │   ├── istio-gateway.yml
+│       │   ├── istio-virtualservice.yml
+│       │   ├── NOTES.txt
+│       │   ├── pdb.yaml
+│       │   ├── serviceaccount.yaml
+│       │   ├── service.yaml
+│       │   └── tests
+│       │       └── test-connection.yaml
+│       └── values.yaml
+└── download-and-untar-helm-charts.sh
+```
+
+### Step 2: Install all helms using custom values.yml
+
+- Go to retailstore-apps/
+
+```bash
+retailstore-apps/
+├── install-retail-apps.sh
+├── uninstall-retail-apps.sh
+├── values-cart.yaml
+├── values-catalog.yaml
+├── values-checkout.yaml
+├── values-orders.yaml
+└── values-ui.yaml
+```
+
+- Install helms
+
+```bash
+./install-retail-apps.sh
+```
+
+### Step 3: Ensure all helm has installed
+
+```bash
+helm list
+```
+
+![alt text](hl.png)
+
+- Show what each helm has deployed
+
+```bash
+helm status ui --show-resources
+helm status orders --show-resources
+```
+
+![alt text](hsui.png)
+
+![alt text](hsod.png)
+
+### Step 4: Access Web
+
+- Access `topology`
+
+```bash
+<alb_url/topology>
+```
+
+![alt text](hmtpgy.png)
+
+- Access Web
+
+![alt text](hmwb.png)
+
+### Stpe 5: Ensure Logs
+
+- Varify logs for catalog, ui
+
+```bash
+kubectl logs -f deployments/catalog
+```
+
+![alt text](hmlc.png)
+

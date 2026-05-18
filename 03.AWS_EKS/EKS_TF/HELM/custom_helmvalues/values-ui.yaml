@@ -1,0 +1,14 @@
+app:
+  theme: teal # orange, green, default
+
+# Ingress for ALB
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/schema: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/liveness
+  tls: []
+  hosts: []

@@ -12,3 +12,6 @@ ingress:
     alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/liveness
   tls: []
   hosts: []
+
+releaseInfo:
+  enabled: true

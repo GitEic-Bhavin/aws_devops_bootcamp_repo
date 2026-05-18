@@ -411,5 +411,85 @@ helm lint retail-store-sample-ui-chart/
 
 ![alt text](hmlint.png)
 
+- **render** - create actual k8s manifests from values.yml and your k8s manifests which regers to values.yml
 
+- It will put your values.yml values into your variables in k8s manifests and will show your actual k8s manifests
+
+```bash
+helm template ui retail-store-sample-ui-chart/
+```
+
+![alt text](hmtp.png)
+
+## Helm Packaging & Publish
+
+**What we will do ?**
+
+- Update chart metadata (Chart.yaml)
+
+- Package Helm chart (.tgz)
+
+- Push to Amazon ECR Private (OCI registry)
+
+- Install Helm chart directly from ECR
+
+- Understand image tag fallback (.Chart.Version)
+
+- New: Release Info ConfigMap
+
+### Step 1: Create dir
+
+```bash
+mkdir -p charts && cd charts
+```
+
+- Pull oci helm chart v1.3.0 and untar it
+
+```bash
+# Pull the UI chart from ECR Public (OCI) and unpack it
+helm pull oci://public.ecr.aws/aws-containers/retail-store-sample-ui-chart \
+  --version 1.3.0 \
+  --untar
+```
+
+### Step 2: Update Charts Metadata
+
+- Update versions to `1.3.1` from `1.3.0`
+
+### Step 3: Add Release Info ConfigMap
+
+- Create a new template file: `templates/release-info.yaml`
+
+```yml
+{{- if .Values.releaseInfo.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ui.fullname" . }}-release-info
+  labels:
+    {{- include "ui.labels" . | nindent 4 }}
+data:
+  chartName: "{{ .Chart.Name }}"
+  chartVersion: "{{ .Chart.Version }}"
+  appVersion: "{{ .Chart.AppVersion }}"
+  releaseName: "{{ .Release.Name }}"
+  releaseNamespace: "{{ .Release.Namespace }}"
+  releaseRevision: "{{ .Release.Revision }}"
+  releaseTime: "{{ now | date "2006-01-02T15:04:05Z07:00" }}"
+{{- end }}
+```
+
+- Add overrides in your custom values-ui.yaml
+
+```yml
+releaseInfo:
+  enabled: true
+```
+
+- Add default values in your values.yaml
+
+```yml
+releaseInfo:
+  enabled: false
+```
 

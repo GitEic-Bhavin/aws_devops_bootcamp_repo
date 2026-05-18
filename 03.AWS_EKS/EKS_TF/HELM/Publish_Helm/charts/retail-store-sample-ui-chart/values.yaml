@@ -121,11 +121,11 @@ ingresses: []
 
 # ingresses:
 #   []
-  # - name: default
-  #   className: ""
-  #   hosts: []
-  #   annotations: {}
-  #   tls: []
+#   # - name: default
+#   #   className: ""
+#   #   hosts: []
+#   #   annotations: {}
+#   #   tls: []
 
 istio:
   enabled: false

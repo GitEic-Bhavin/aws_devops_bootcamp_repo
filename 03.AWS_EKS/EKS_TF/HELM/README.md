@@ -493,3 +493,126 @@ releaseInfo:
   enabled: false
 ```
 
+## Create Pvt ECR & Publish Helm Chart
+
+- Create ECR
+
+```bash
+REGION=ap-south-1
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+
+aws ecr get-login-password --region "$REGION" \
+| helm registry login -u AWS --password-stdin "$REGISTRY"
+
+ aws ecr create-repository \
+  --repository-name bhavin-retail-store-sample-ui-chart \
+  --region "$REGION" \
+  --tags \
+    Key=Department,Value=xyz \
+    Key=End_Date,Value=18_May_2026 \
+  || true
+```
+
+![alt text](cecr.png)
+
+- Push HelmChart to ECR
+
+```bash
+cd Publish_Helm/charts
+helm package ./retail-store-sample-ui-chart  # -> This should create *1.3.1.tgz files after packaging it
+
+# Push to ECR (OCI): IMPORTANT: push to registry root (no suffix) ---
+helm push bhavin-retail-store-sample-ui-chart-1.3.1.tgz oci://"$REGISTRY"
+
+# Verify
+aws ecr describe-images \
+  --repository-name retail-store-sample-ui-chart \
+  --region "$REGION" \
+  --query 'imageDetails[].imageTags'
+```
+
+![alt text](hmpb.png)
+
+## Install Chart from Pvt ECR
+
+- Install helm for v1.30.1
+
+- This will pull helm chart from pvt ECR and apply custom values-ui.yaml
+
+- Before Install , `You must pass values-ui.yaml to use customized values`.
+
+- `values-ui.yaml` - Pass public image of retail-ui to used by our customized helm charts.
+
+```yml
+app:
+  theme: teal # orange, green, default
+
+# Ingress for ALB
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/schema: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/liveness
+  tls: []
+  hosts: []
+
+releaseInfo:
+  enabled: true
+
+image:
+  repository: public.ecr.aws/aws-containers/retail-store-sample-ui
+  pullPolicy: IfNotPresent
+  tag: 1.3.0
+```
+
+- **Without this your container will failed**
+
+```bash
+# helm install
+helm install retail-ui \
+  oci://"$REGISTRY"/bhavin-retail-store-sample-ui-chart \
+  --version 1.3.1 \
+  -f ../../custom_helmvalues/values-ui.yaml 
+```
+
+![alt text](hmis.png)
+
+- for upgrade
+
+```bash
+# helm upgrade
+helm upgrade --install retail-ui \
+  oci://"$REGISTRY"/bhavin-retail-store-sample-ui-chart \
+  --version 1.2.5 \
+  -f ../../custom_helmvalues/values-ui.yaml
+```
+
+## Ensure your helm charts
+
+```bash
+helm list
+
+helm get values retail-ui-bhavin
+```
+
+![alt text](hmgt.png)
+
+- Show all resources deployed by helm
+
+```bash
+helm status retail-ui-bhavin --show-resources 
+```
+
+![alt text](hmrs.png)
+
+
+## Uninstall Helm
+
+```bash
+helm uninstall retail-ui-bhavin
+```
+

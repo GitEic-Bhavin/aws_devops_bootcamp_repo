@@ -199,6 +199,21 @@ kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-cont
     
     - NodePort must be opened
 
+- Apply all manifests for instance mode
+
+```bash
+kubectl apply -Rf servies_manifests/
+```
+
+
+- Ensure Ingress created & Its status
+
+![alt text](igim.png)
+
+- Access App
+
+![alt text](igismd.png)
+
 
 2. IP Mode
 
@@ -213,6 +228,15 @@ kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-cont
     - Faster, more direct routing.
     
     - Supports AWS Fargate
+
+
+- Ensure Ingress & Status
+
+![alt text](igipmd.png)
+
+- Access web
+
+![alt text](igipap.png)
 
 
 | Feature | Instance Mode | IP Mode |

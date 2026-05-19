@@ -31,6 +31,22 @@ terraform apply
 
 ![alt text](eksp.png)
 
+**NOTES**
+
+- Use `syncSecret.enabled` in secrets store.
+
+- It will sync your secrets between the AWS Secrets Manager and your **Native k8s secrets**.
+
+- It will help while you deleted your AWS Secrets Manager accidentaly.
+
+- It is `less secure then the `**`Direct secret mount using external secret manager`**.
+
+- Use `helm_release` to install, upgrade by helm.
+
+- Use `set = [ { name = "lbc_controller" value = tf_resource_address } ]`.
+
+- It is used to pass our custom value in helm during install upgrade just like -- vpcId, -- cluster_name
+
 **What issue i had faced ?**
 
 ```bash

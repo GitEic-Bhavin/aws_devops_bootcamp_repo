@@ -27,9 +27,11 @@ terraform apply
 
 ![alt text](eksnd.png)
 
+
 - Ensure all required controller and pod identity agent has installed and running status.
 
 ![alt text](eksp.png)
+
 
 **NOTES**
 
@@ -74,6 +76,7 @@ Kubernetes cluster unreachable: unable to load root certificates: unable to pars
 ## We will deploy Persistance Application in Data Plans by Terraform
 
 ![alt text](pdeks.png)
+
 
 - In this architecture, we will deploy and setup our apps in 2 parts.
 

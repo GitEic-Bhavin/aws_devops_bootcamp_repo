@@ -15,3 +15,5 @@
 03.AWS_EKS/EKS_TF/EBS_PV_PVC/*.json
 04.TF_EKS_AddOns/*.tfstate*
 04.TF_EKS_AddOns/.terraform*
+05.RetailStore_Microservices_with_AWS_Data_Plane/.terraform*
+05.RetailStore_Microservices_with_AWS_Data_Plane/*.tfstate*

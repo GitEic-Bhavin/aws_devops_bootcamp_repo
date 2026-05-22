@@ -31,3 +31,8 @@ output "eks_node_instance_role_arn" {
 output "configure_kubectl_context" {
     value = "aws eks --region ${var.aws_region} update-kubeconfig --name ${local.eks_cluster_name}"
 }
+
+output "eks_cluster_security_group_id" {
+  # value = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  value = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+}

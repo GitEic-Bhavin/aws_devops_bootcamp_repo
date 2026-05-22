@@ -62,3 +62,69 @@ Karpenter
 
 [karpenter docs]("https://karpenter.sh/docs/)
 
+Karpenter Architecture
+---
+
+![alt text](arch.png)
+
+- Karpenter works without nodegroups.
+
+- When karpenter detects unschedules pods, first it will look for pods requirements like cpu, memory etc.
+
+- **Karpenter** requires **NodePool and EC2NodeClass** before launch new worker node or create NodeGroup.
+
+- In your Deployment manifest you must have to define the NodePool annotations wheather your node should shchedule to `On-Demand` or `Spot` NodePool.
+
+- Based on Annotations and Pods resources requirements it will select NodePool and create NodeGroups and launch new nodes to that nodepool.
+
+- `Karpenter NodePool` refers the `EC2NodeClass` where you can define your `Node Class` requirements.
+
+```yml
+subnetSelectorTerms:
+  - tags:
+      kubernetes.io/cluster/<cluster_name>: owned
+      kubernetes.io/role/internal-elb: "1"
+# Auto-discover security groups:
+securityGroupSelectorTerms:
+  - tags:
+      kubernetes.io/cluster/<cluster_name>: owned
+# Recommended EBS
+blockDeviceMappings:
+  - deviceName: /dev/xvda
+    ebs:
+      volumeSize: 20Gi
+      volumeType: gp3
+      encrypted: true
+      deleteOnTermination: true
+```
+
+- `Every NodePool` refers the `nodeClassRef`
+
+```yml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: ondemand-nodepool
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default-ec2nodeclass
+```
+
+- This is `EC2NodeClass`
+
+![alt text](ec2nc.png)
+
+- `subnetSelectroTerms:` will select your `pvt subnets in your vpc.`
+
+- `securityGroupSelectorTerms:` will select your EKS Node's Security Groups.
+
+- `This two things is must requires for karpeneter`.
+
+- karpenter instance must know in which subnet group as NodeGroup Your Node should launch and which Security Groups should assign to your new nodes.
+
+- For that this 2 thigs is must requires.
+

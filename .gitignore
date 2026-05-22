@@ -17,3 +17,5 @@
 04.TF_EKS_AddOns/.terraform*
 05.RetailStore_Microservices_with_AWS_Data_Plane/.terraform*
 05.RetailStore_Microservices_with_AWS_Data_Plane/*.tfstate*
+06.Karpenter_Controller/.terraform*
+06.Karpenter_Controller/*.tfstate*

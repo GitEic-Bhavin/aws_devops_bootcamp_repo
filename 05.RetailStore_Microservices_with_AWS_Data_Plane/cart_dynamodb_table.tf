@@ -1,7 +1,7 @@
 # Create DynamoDB Table
 
 resource "aws_dynamodb_table" "cart_db" {
-  name = "Items"
+  name = "Items-bhavin"
   billing_mode = "PAY_PER_REQUEST"
   hash_key = "id"
 

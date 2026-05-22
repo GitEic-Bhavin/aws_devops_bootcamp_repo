@@ -99,3 +99,180 @@ terraform apply
 
 ![alt text](sqsq.png)
 
+# External DNS with Ingress Controller
+
+- External Dns is a DNS Management controller which will **Continuously Monitor your Kube-API Server**.
+
+- Whenver you made change in your ingress, k8s deployments, k8s services it will make API Call request and this will receive by **API Server**.
+
+- While **API Server** will recevie , this Change will detect by **External DNS Controller** and it will `Create`, `Update` your AWS Route53 DNS Records itself.
+
+- Ex. Ingress - You defined to use ALB with HTTP or HTTPS with AWS Certificate ARNs - External DNS will update this ACM Certificates value in DNS Records as CNAME.
+
+- Ex. Ingress - You defined to use your custom **Domain name like `app1.xyz.com`** which is pointing to your k8s services like ClusterIP, NodePort, `External DNS Controller` will create DNS Records for this.
+
+Let's walk through Practical
+
+### Step 1: Create IAM Role and attach to PIA Assoications
+
+- Use AWS Managed Policy `AmazonRoute53FullAccess` for `Testing Only`.
+
+- Use Least Previledged Policy
+
+```yml
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "route53:ChangeResourceRecordSets"
+      ],
+      "Resource": [
+        "arn:aws:route53:::hostedzone*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "route53:ListHostedZones",
+        "route53:ListResourceRecordSets",
+        "route53:ListTagsForResource"
+      ],
+      "Resource": [
+        "*"
+      ]
+    }
+  ]
+}
+```
+
+- Attach this role to PIA Associations
+
+```bash
+terraform apply -f ../04.TF_EKS_AddOns/externaldns_iam_policy.tf
+```
+
+### Step 2: Install AddOns of External-DNS Controller
+
+```bash
+terraform apply -f ../04.TF_EKS_AddOns/externaldns_addons.tf
+```
+
+- It will install in `external-dns` namesapce bydefault.
+
+### Step 3: Issue AWS Certificate Public Certs
+
+1. Register domain in AWS Route53.
+
+2. Create a SSL Certificat in Certificate Manager
+
+   - Go to AWS certificate manager > Request.
+
+   - Give your domain name like *.mydomain.com.
+
+   - Choose validation mathod as DNS Validations.
+
+3. Update SSL Cert in Ingress Service
+
+    - Add Annotations for SSL and DNS Domains Name.
+
+```yml
+ ## SSL Settings
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}, {"HTTP":80}]'
+
+    alb.ingress.kubernetes.io/certificate-arn: <Your_ACM_Certificagte_ARNs>
+
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+
+    # External DNS - For creating DNS Record itself.
+    external-dns.alpha.kubernetes.io/hostname: extdns1.bhavindevops.shop, extdns2.bhavindevops.shop
+```
+
+4. Create Route53 Hosted Zones for your domains.
+
+    - Go to Route53 > HostedZones
+    - Give your domain name `mydomain.com`.
+    - Choose Type as `Public hosted zones`.
+    - Click on Create.
+
+5. Modify your **nameserver** in your controller domains.
+
+    - Add 4 nameserver created in HostedZones into Your Controller Domains by
+
+        - Go to Controller domains > DNS > NameServer > Add 4 nameserver.
+    
+![alt text](udnsdc.png)
+
+6. Create DNS Records in amazone Route53 for create validation records
+
+    - Choose your Certificates created in AWS Certificate Manager > create records in route53.
+    - Choose domains & create.
+
+7. Use this cert arn into Ingress
+
+### Step 4: Create Ingress
+
+```bash
+kubectl apply -Rf Ingress/
+```
+
+### Step 5: Deploy Microservices
+
+- Deploy all Microservies with it svc, service accounts, configmpa, deployments, ServiceProviderClass.
+
+```bash
+kubectl apply -Rf MicroServices/
+```
+
+### Step 6: Varify Ext-DNS 
+
+![alt text](extdns-varify.png)
+
+
+### Step 6: Access Web App by domain name
+
+- Check topology
+
+```bash
+http://bhavindevops.shop
+```
+
+![alt text](extdns-dns-topology.png)
+
+- Check App landing page
+
+![alt text](extdns-web-access.png)
+
+- Check cart svc
+
+![alt text](ext-dns-dns-cart.png)
+
+- Check Catalog svc
+
+![alt text](ext-dns-dns-catalog.png)
+
+- Check Checkout svc
+
+![alt text](ext-dns-dns-checkout.png)
+
+
+**NOTE**
+
+**External-DNS Controller** is DNS controller to create, update, delete DNS records as per your Ingress Resources and K8s Svc, K8s Deployment resources.
+
+**External-DNS Controller** - Will not delete DNS Records if you delet **Ingress**.
+
+**Bcz It uses `Upsert-Policy`** by default.
+
+```bash
+kubectl get deployment external-dns -n external-dns -o yaml
+```
+
+![alt text](upsertp.png)
+
+
+**--policy=upsert-only** - will only update, create DNS Records, it will not delete it.
+
+**--policy=sync** - will keep your Ingress resources and K8s Resouces in `sync`, so it will delete DNS Records after you delete Ingress.
+

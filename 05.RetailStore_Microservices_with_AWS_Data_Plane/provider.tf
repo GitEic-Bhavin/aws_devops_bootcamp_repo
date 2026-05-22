@@ -5,6 +5,15 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
+    #  mysql = {
+    #   source  = "petoju/mysql"
+    #   version = "~> 3.0"
+    # }
+
+    # postgresql = {
+    #   source  = "cyrilgdn/postgresql"
+    #   version = "~> 1.26"
+    # }
   }
 
   # Setup S3 Remote Backend
@@ -34,6 +43,30 @@ provider "aws" {
 
     }
 }
+
+# # Use existing MySQL RDS
+
+# provider "mysql" {
+
+#   endpoint = "${data.aws_db_instance.catalog_rds.address}:3306"
+
+#   username = local.retailstore_secret_json.username
+#   password = local.retailstore_secret_json.password
+
+#   tls = true
+# }
+
+# # Use existing RDS PSQL DB 
+
+# provider "postgresql" {
+
+#   host = data.aws_db_instance.psql.address
+#   port = 5432
+#   database = "ordersdb"
+#   username = local.retailstore_secret_json.username
+#   password = local.retailstore_secret_json.password
+#   sslmode = "require"
+# }
 
 data "aws_caller_identity" "current" {}
 

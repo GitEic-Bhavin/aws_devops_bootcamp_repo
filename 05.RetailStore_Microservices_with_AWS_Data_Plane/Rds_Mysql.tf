@@ -20,7 +20,7 @@ resource "aws_db_instance" "catalog_rds" {
   tags = var.tags
 }
 
-# Use existing AWS Secrets Manager Secret
+# # Use existing AWS Secrets Manager Secret
 
 data "aws_secretsmanager_secret" "secret" {
     name = "Bhavin_EKS_catalog-db-secret"
@@ -44,11 +44,11 @@ output "secret_passwd" {
   sensitive = true
 }
 
-# If you want to actually see the values just once (for validation), you can run:
-# terraform output -json | jq -r '.debug_retailstore_secret_username.value'
-# terraform output -json | jq -r '.debug_retailstore_secret_password.value'
+# # If you want to actually see the values just once (for validation), you can run:
+# # terraform output -json | jq -r '.debug_retailstore_secret_username.value'
+# # terraform output -json | jq -r '.debug_retailstore_secret_password.value'
 
-# Create RDS Pvt Subnet Group
+# # Create RDS Pvt Subnet Group
 
 resource "aws_db_subnet_group" "rds_pvt" {
   name = "${local.eks_cluster_name}-rds-pvt-subnets"

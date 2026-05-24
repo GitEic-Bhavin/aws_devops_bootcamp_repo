@@ -128,3 +128,14 @@ spec:
 
 - For that this 2 thigs is must requires.
 
+**How to setup Karpenter**
+
+![alt text](prkp.png)
+
+- `We have to create 2 times diff IAM policy and IAM Role` for karpenter. Why ?
+
+While we will install karpenter controller it will run its pods.
+
+This karpenter pods `must allow to create our NodeGroup's Worker Nodes, Terminates this Nodes, SQS Msg Recieves etc`
+
+- Seonnd Role, IAM Policy for `This Woker Node which is created by Karpenter` **must allow for Join EKS Cluster**, ***Pull Docker, OCI Image**, **Configure EC2 Networking and more**.

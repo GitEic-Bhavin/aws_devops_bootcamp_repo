@@ -1,0 +1,40 @@
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default-ec2nodeclass
+spec:
+  amiFamily: AL2023
+  amiSelectorTerms:
+    - alias: al2023@latest
+  # role: <Your karpenter node role>
+  role: "arn:aws:iam::454143665149:role/bhavindemo-eks-test-karpenter_node_role"  
+
+  subnetSelectorTerms:
+    - tags:
+        kubernetes.io/cluater/bhavindemo-eks-test: owned
+        kubernetes.io/role/internal-elb: "1"
+  
+  securityGroupSelectorTerms:
+    - tags:
+        kubernetes.io/cluster/bhavindemo-eks-test: owned
+  
+  # This tags requires for auto-discovery of resources like Karpenter cannot find:
+# - subnets
+# - security groups
+# - cluster networking resources
+
+# Which AWS resources belong to this EKS cluster
+  tags:
+    karpenter.sh/discovery: bhavindemo-eks-test
+  # EBS Configurations
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 20Gi
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+
+  metadataOptions:
+    httpTokens: required
+    httpPutResponseHopLimit: 2

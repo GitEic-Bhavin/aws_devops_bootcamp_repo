@@ -1,0 +1,48 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: ondemand-nodepool
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default-ec2nodeclass
+      
+      taints: []
+      startupTaints: []
+
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["t3", "t3a"]
+
+        - key: karenter.k8s.aws/instance-size
+          operator: In
+          values: ["medium", "small", "large", "micro"]
+
+        - keu: topology.kubernetes.io/zone
+          operator: In
+          values: ["ap-south-1a", "ap-south-1b"]
+
+
+
+  limits:
+    cpu" "50"
+  
+  disruption:
+    consoliationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s

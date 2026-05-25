@@ -19,5 +19,5 @@
 05.RetailStore_Microservices_with_AWS_Data_Plane/*.tfstate*
 06.Karpenter_Controller/.terraform*
 06.Karpenter_Controller/*.tfstate*
-07.HPA/1.Metrics_Server_AddOns/terraform*
+07.HPA/1.Metrics_Server_AddOns/.terraform*
 07.HPA/1.Metrics_Server_AddOns/*.tfstate*

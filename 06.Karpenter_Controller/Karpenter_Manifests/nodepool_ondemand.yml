@@ -30,19 +30,19 @@ spec:
           operator: In
           values: ["t3", "t3a"]
 
-        - key: karenter.k8s.aws/instance-size
+        - key: karpenter.k8s.aws/instance-size
           operator: In
           values: ["medium", "small", "large", "micro"]
 
-        - keu: topology.kubernetes.io/zone
+        - key: topology.kubernetes.io/zone
           operator: In
           values: ["ap-south-1a", "ap-south-1b"]
 
 
 
   limits:
-    cpu" "50"
+    cpu: "50"
   
   disruption:
-    consoliationPolicy: WhenEmptyOrUnderutilized
+    consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 30s

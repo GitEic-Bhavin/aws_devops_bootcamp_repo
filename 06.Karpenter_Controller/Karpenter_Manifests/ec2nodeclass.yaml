@@ -7,11 +7,12 @@ spec:
   amiSelectorTerms:
     - alias: al2023@latest
   # role: <Your karpenter node role>
-  role: "arn:aws:iam::454143665149:role/bhavindemo-eks-test-karpenter_node_role"  
+  # role: "arn:aws:iam::454143665149:role/bhavindemo-eks-test-karpenter_role"  
+  role: bhavindemo-eks-test-karpenter_node_role
 
   subnetSelectorTerms:
     - tags:
-        kubernetes.io/cluater/bhavindemo-eks-test: owned
+        kubernetes.io/cluster/bhavindemo-eks-test: owned
         kubernetes.io/role/internal-elb: "1"
   
   securityGroupSelectorTerms:

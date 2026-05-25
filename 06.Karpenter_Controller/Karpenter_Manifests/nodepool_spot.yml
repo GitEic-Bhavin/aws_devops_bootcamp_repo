@@ -43,7 +43,7 @@ spec:
   limits:
     cpu: "50"
   disruption:
-    consolidationPolicy: WhenEmptyorUnderutilized
+    consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 30s
 
     budgets:

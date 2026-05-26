@@ -336,3 +336,124 @@ opentelemetry:
 
 - This will execute script to install all microservices one by one with using secretsmanager secrets.
 
+Observability - OTel - Traces send to AWS X-Ray
+---
+
+We will send traces from application to AWS X-Ray.
+
+![alt text](xray.png)
+
+**1. Receivers** 
+
+**2. Processors**
+
+**3. Exporters**
+
+**4. Extensions**
+
+**1. Receivers** 
+
+- Receivers are **Entry Points** into collector `Application → OTLP Receiver → Collector`.
+
+- It uses 2 Protocols
+
+  1. http - is a rest of protocol , easier to debug
+  2. grpc - is a binary protocol which is more efficient.
+
+```yml
+receivers:
+  http: 4318
+
+  grpc: 4317
+```
+
+- Whatever your apps generates traces, it will receivers by this receivers.
+
+**2. Processors**
+
+- It will process your traces and keep only requires traces.
+
+  **memory_limiter**
+
+```yml
+limit_mib: 512
+```
+
+- It will prevents from use more or out of limits memory while peak in traffics.
+
+- It will prevent to OOM Killed.
+
+- It will use max only 512 Mib Memory.
+
+- If there are too many request increasing, too many traces will create at same time.
+
+- It will recevies only that much traces which use max 512 Mib Memory.
+
+- Rest of traces will be ignored and droped.
+
+```bash
+Too many traces
+     ↓
+memory_limiter drops extra traces
+     ↓
+Collector survives
+```
+
+  **filter health check**
+
+  - It will filters traces only for those requires.
+  - Else, it will create traces for all types like health check of alb, other health check points like kube-probe.
+
+  **k8sattributes**
+
+  - X-Ray only sees `service.name=orders` which is not enough, bcz which service is affected, which pod affected, which deployment/nodes affected that aslo requires for traces.
+
+
+  - It will enriches traces with all requires k8s attributes info like
+
+```bash
+k8s.namespace.name
+k8s.deployment.name
+k8s.pod.name
+k8s.node.name
+```
+
+  **batch**
+
+  - It will wait for 10 seconds and collect 50 diff traces and make only 1 API Calls to create this 50 traces.
+
+  - Without Batch it will create each API Calls for each trace requrest.
+
+**Exporter**
+
+- Send data outside collectors like AWS X-Ray.
+
+**Extensions**
+
+- Extensions help the collector itself by using diff requires extensions like `health_check` extensions.
+
+
+**ServiceAccount**
+
+Collector needs RBAC to create logs, traces
+
+```bash
+Retail Applications
+      ↓
+OTEL Auto Instrumentation
+      ↓
+ADOT Collector Deployment
+      ↓
+Receiver
+      ↓
+Processors
+   ├── memory_limiter
+   ├── filter
+   ├── k8sattributes
+   └── batch
+      ↓
+awsxray exporter
+      ↓
+AWS X-Ray
+```
+

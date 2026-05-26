@@ -353,6 +353,9 @@ We will send traces from application to AWS X-Ray.
 
 **1. Receivers** 
 
+![alt text](oteltc.png)
+
+
 - Receivers are **Entry Points** into collector `Application → OTLP Receiver → Collector`.
 
 - It uses 2 Protocols
@@ -457,3 +460,237 @@ awsxray exporter
 AWS X-Ray
 ```
 
+**Service**:
+
+- It will connect `receivers`, `processors`, `exporters` together into an acutal pipelines.
+
+  **without Service**
+    
+    - Collector know receivers, processors, exporters exists but it can't connect them.
+
+- Whatever you written in this service: block only that functions will work.
+
+- If you didn't receivers , it will never receives traces from applications.
+
+INSTRUMENTATIONS
+---
+
+When you want to generate Traces, logs , Metrics in your application itself via observability.
+
+It is called `Make your applicatoin Instrumentations` so your apps will create traces, logs etc itself.
+
+This is done by Observability by `kind: Instrumentation`
+
+- When you create `kind: Instrumentation` , the OpenTelemetry operator watches kubernetes pods.
+
+- When pod has annotation like `instrumentation.opentelmetry.io/inject-java: "true"`, The OTel Operator will automatically:
+  
+  - Inject OTel Java Agent
+  - Adds env vars of OTel
+  - Configures exporter endpoint
+  - Modifies pod startup
+
+```bash
+Instrumentation CR created
+        ↓
+OpenTelemetry Operator watches pods
+        ↓
+Pod annotation detected
+        ↓
+Operator injects OTEL auto-instrumentation
+        ↓
+Application starts generating traces
+```
+
+```yml
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: default-instrumentation
+  namespace: default
+spec:
+  # ============ GLOBAL ENV (applies to all languages) ============
+  env:
+    # Enable SDK
+    # This will create traces set to true and tracing enabled
+    - name: OTEL_SDK_DISABLED
+      value: "false"
+
+    # Use OTLP over HTTP/protobuf
+    # This is Exporter Protocol like grpc and http
+    # This is http with protobuf protocol
+    - name: OTEL_EXPORTER_OTLP_PROTOCOL
+      value: "http/protobuf"
+
+    # Enable AWS resource detection (EKS, EC2 metadata etc.)
+    
+    - name: OTEL_RESOURCE_PROVIDERS_AWS_ENABLED
+      value: "true"
+
+    # Export only TRACES for now (no metrics/logs)
+    # Enable Traces only. Bcz of 1 collector for 1 metrics , 1 for traces , 1 for logs
+    - name: OTEL_TRACES_EXPORTER
+      value: "otlp"
+
+    # Disable metrics export for now (no metrics pipeline yet)
+    - name: OTEL_METRICS_EXPORTER
+      value: "none"
+
+    # Explicitly disable logs export
+    - name: OTEL_LOGS_EXPORTER
+      value: "none"
+
+  # OTLP endpoint for all auto-instrumented apps
+  exporter:
+    endpoint: http://adot-traces-collector:4318
+
+# This will send traces to ADOT OTel Collector on its service endpoint named adot-traces-colletcot and its svc port is 4318
+
+
+
+  # ============ Cross-service tracing config =====================
+  propagators:
+    - tracecontext
+    - baggage
+
+  sampler:
+    type: always_on
+```
+
+- otel-collector
+
+![alt text](otcl.png)
+
+### Step 1: deploy otel-traces
+
+```bash
+# Change Directory 
+cd 20_02_OpenTelemetry_Traces
+
+# Deploy ADOT Collector and Review Logs
+kubectl apply -f 01_OpenTelemetry_Traces/01_adot_collector_traces.yaml
+
+# Verify ADOT Collector and Deployment
+kubectl get opentelemetrycollector
+kubectl get deploy
+kubectl describe deployment adot-traces
+
+# Verify if this collector is part of ADOT Operator installed via EKS Addon
+kubectl describe deployment adot-traces | grep operator
+
+# Review ADOT Collector Logs
+kubectl get pods
+kubectl logs -f <POD-NAME>
+or 
+kubectl logs -f -l  app.kubernetes.io/name=adot-traces-collector
+
+# Deploy ADOT Instrumentation 
+kubectl apply -f 01_OpenTelemetry_Traces/02_adot_instrumentation_traces.yaml
+
+# Verify ADOT Instrumentation
+kubectl get instrumentation
+```
+
+- Get otel-collector
+
+![alt text](ocgt.png)
+
+Set up ADOT OTel Collector for Sending Logs
+---
+
+![alt text](otlg.png)
+
+- adot collector yml file will remain same as we did earlier for otel collector for traces.
+
+- Just value will change for logs
+
+```yml
+# ADOT Logs Collector - DaemonSet (One Pod Per Node)
+# Sends container logs from EKS to CloudWatch Logs
+
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: adot-logs
+  namespace: default
+spec:
+  mode: daemonset
+  serviceAccount: adot-collector
+
+  # Inject node name as environment variable
+  env:
+    - name: K8S_NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName  
+  
+  # Fix: Allow reading host filesystem /var/log/pods
+  podSecurityContext:
+    runAsUser: 0
+    runAsGroup: 0
+  
+   # MISSING: Add tolerations to run on all nodes
+  tolerations:
+    - operator: Exists
+      effect: NoSchedule
+    - operator: Exists
+      effect: NoExecute
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  
+  volumes:
+    - name: varlogpods
+      hostPath:
+        path: /var/log/pods
+  
+  volumeMounts:
+    - name: varlogpods
+      mountPath: /var/log/pods
+      readOnly: true
+  
+  config:
+    receivers:
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/default_adot-*/*/*.log
+          - /var/log/pods/kube-system_*/*/*.log
+        start_at: end
+    
+    processors:
+      memory_limiter:
+        check_interval: 5s
+        limit_mib: 400
+      
+      k8sattributes:
+        extract:
+          metadata:
+            - k8s.namespace.name
+            - k8s.pod.name
+            - k8s.container.name
+      
+      batch:
+        timeout: 10s
+    
+    exporters:
+      awscloudwatchlogs:
+        region: us-east-1
+        log_group_name: "/aws/eks/retail-dev-eksdemo1/application"
+        log_stream_name: "retail-dev-eksdemo1-v4"    # Single Stream
+        # log_stream_name: "${K8S_NODE_NAME}"         # Per k8s Node 
+    
+    service:
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [memory_limiter, k8sattributes, batch]
+          exporters: [awscloudwatchlogs]
+
+```

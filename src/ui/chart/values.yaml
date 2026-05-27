@@ -119,13 +119,13 @@ ingresses: []
   #   annotations: {}
   #   tls: []
 
-ingresses:
-  []
-  # - name: default
-  #   className: ""
-  #   hosts: []
-  #   annotations: {}
-  #   tls: []
+# ingresses:
+#   []
+#   # - name: default
+#   #   className: ""
+#   #   hosts: []
+#   #   annotations: {}
+#   #   tls: []
 
 istio:
   enabled: false

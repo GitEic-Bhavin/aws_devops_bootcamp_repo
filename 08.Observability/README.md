@@ -604,6 +604,12 @@ Set up ADOT OTel Collector for Sending Logs
 
 - Just value will change for logs
 
+- We will deploy OTel collector for logs as **DeamonSets**
+
+- Bcz of, all pod's containers logs will return to the nodes local file system at path **/var/logs/pods**. So each Nodes has its own logs.
+
+
+
 ```yml
 # ADOT Logs Collector - DaemonSet (One Pod Per Node)
 # Sends container logs from EKS to CloudWatch Logs
@@ -624,11 +630,16 @@ spec:
         fieldRef:
           fieldPath: spec.nodeName  
   
+################################
   # Fix: Allow reading host filesystem /var/log/pods
+
+  # This is we write podSecurityContext for root user by runAsUser: 0
+  # Why ? Bcz logs is stored at Nodes loation at /var/logs/pods which requires ROOT PERMISSIONS.
   podSecurityContext:
     runAsUser: 0
     runAsGroup: 0
-  
+################################
+
    # MISSING: Add tolerations to run on all nodes
   tolerations:
     - operator: Exists
@@ -681,7 +692,98 @@ spec:
     
     exporters:
       awscloudwatchlogs:
+        region: us-east-1# ADOT Logs Collector - DaemonSet (One Pod Per Node)
+# Sends container logs from EKS to CloudWatch Logs
+
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: adot-logs
+  namespace: default
+spec:
+  mode: daemonset
+  serviceAccount: adot-collector
+
+  # Inject node name as environment variable
+  env:
+    - name: K8S_NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName  
+  
+  # Fix: Allow reading host filesystem /var/log/pods
+  podSecurityContext:
+    runAsUser: 0
+    runAsGroup: 0
+  
+   # MISSING: Add tolerations to run on all nodes
+  #  Ensure that pods of otel collector for logs should runs on every nodes.
+  # Even that node is taint also
+  tolerations:
+    - operator: Exists
+      effect: NoSchedule
+    - operator: Exists
+      effect: NoExecute
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  
+  # Define volumes on Node's Local HostsPath: /var/log/pods
+  volumes:
+    - name: varlogpods
+      hostPath:
+        path: /var/log/pods
+  
+  # Mount this Node's local path /var/log/pods to containers path with readOnly.
+
+  volumeMounts:
+    - name: varlogpods
+      mountPath: /var/log/pods
+      readOnly: true
+  
+  config:
+    receivers:
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/default_adot-*/*/*.log
+          - /var/log/pods/kube-system_*/*/*.log
+        start_at: end
+    
+    processors:
+      memory_limiter:
+        check_interval: 5s
+        limit_mib: 400
+      
+      k8sattributes:
+        extract:
+          metadata:
+            - k8s.namespace.name
+            - k8s.pod.name
+            - k8s.container.name
+      
+      batch:
+        timeout: 10s
+    
+    exporters:
+      awscloudwatchlogs:
         region: us-east-1
+        log_group_name: "/aws/eks/retail-dev-eksdemo1/application"
+        log_stream_name: "retail-dev-eksdemo1-v4"    # Single Stream
+        # log_stream_name: "${K8S_NODE_NAME}"         # Per k8s Node 
+    
+    service:
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [memory_limiter, k8sattributes, batch]
+          exporters: [awscloudwatchlogs]
         log_group_name: "/aws/eks/retail-dev-eksdemo1/application"
         log_stream_name: "retail-dev-eksdemo1-v4"    # Single Stream
         # log_stream_name: "${K8S_NODE_NAME}"         # Per k8s Node 
@@ -694,3 +796,110 @@ spec:
           exporters: [awscloudwatchlogs]
 
 ```
+
+- Assign Root Permission for logs at /var/logs/pods
+
+```yml
+
+  # This is we write podSecurityContext for root user by runAsUser: 0
+  # Why ? Bcz logs is stored at Nodes loation at /var/logs/pods which requires ROOT PERMISSIONS.
+  podSecurityContext:
+    runAsUser: 0
+    runAsGroup: 0
+```
+
+- Mount Volume to container path for /var/log/pods
+
+```yml
+  # Define volumes on Node's Local HostsPath: /var/log/pods
+  volumes:
+    - name: varlogpods
+      hostPath:
+        path: /var/log/pods
+  
+  # Mount this Node's local path /var/log/pods to containers path with readOnly.
+  
+  volumeMounts:
+    - name: varlogpods
+      mountPath: /var/log/pods
+      readOnly: true
+```
+
+- Let's see receviers
+
+- We will use `filelog` for receivers to bring logs from Node's path at /var/log/pods/*/*/*.log and it will use by this OTel collector and send to AWS CloudWatch Logs.
+
+- We had defined exclude to do not brign those log files.
+
+```yml
+  config:
+    receivers:
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/default_adot-*/*/*.log
+          - /var/log/pods/kube-system_*/*/*.log
+        start_at: end
+```
+
+- Let's see processors
+
+- This `memory_limiter` will use only max size of logs and logs files of 400Mib only to avoide OOM Killed Issue.
+
+- It will brings logs at every 5s.
+
+```yml
+    processors:
+      memory_limiter:
+        check_interval: 5s
+        limit_mib: 400
+```
+
+- Let's see exporter
+
+- We will stores logs in `awscloudwatchlogs` so in which regions you have cloudwatch and its logs_group_name and its log_stream_name that we have to write here.
+
+```yml
+    exporters:
+      awscloudwatchlogs:
+        region: us-east-1
+        log_group_name: "/aws/eks/retail-dev-eksdemo1/application"
+        log_stream_name: "retail-dev-eksdemo1-v4"    # Single Stream
+        # log_stream_name: "${K8S_NODE_NAME}"         # Per k8s Node 
+```
+
+### Step 1: Deploy logs otel collector as deamonsets
+
+```bash
+# Change Directory 
+cd 20_03_OpenTelemetry_Logs
+
+# Deploy Logs ADOT Collector and Review Logs
+kubectl apply -f 01_OpenTelemetry_Logs/01_adot_collector_logs.yaml
+
+# Verify ADOT Collector and Daemonset
+kubectl get opentelemetrycollector
+kubectl get ds
+kubectl describe ds adot-logs-collector
+kubectl get pods
+
+# Verify if this collector is part of ADOT Operator installed via EKS Addon
+kubectl describe ds adot-logs-collector | grep operator
+
+# Restart Retail Apps
+./restart-retailapp.sh
+
+# Review ADOT Collector Logs
+kubectl get pods
+kubectl logs -f <POD-NAME>
+or 
+kubectl logs -f -l  app.kubernetes.io/name=adot-logs-collector --max-log-requests 10
+```
+
+![alt text](otellg.png)
+
+- Varify on CW
+
+![alt text](cwlogs.png)
+

@@ -68,7 +68,7 @@ jobs:
           git diff --quiet || (
             git add chart/values-ui.yaml
             git commit -m "Update UI image tag to sha-${GITHUB_SHA::7}"
-            git push origin main
+            git push origin master
           )
 
       - name: CI Complete

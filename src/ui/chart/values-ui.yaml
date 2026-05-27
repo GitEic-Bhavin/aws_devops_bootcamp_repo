@@ -39,7 +39,7 @@ ingress:
     alb.ingress.kubernetes.io/load-balancer-name: bhavin-http-ip-mode-ingress
 
     # External DNS Annotation
-    # external-dns.alpha.kubernetes.io/hostname: retailstore1.stacksimplify.com
+    # external-dns.alpha.kubernetes.io/hostname: retailstore1.stacksimplify.com 
   tls: []
   hosts: []
 

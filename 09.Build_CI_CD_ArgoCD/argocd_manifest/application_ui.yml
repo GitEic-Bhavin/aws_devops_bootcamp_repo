@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: 'https://github.com/GitEic-Bhavin/aws_devops_bootcamp_repo.git'
     targetRevision: master
-    path: /src/ui/chart
+    path: src/ui/chart
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: default

@@ -139,6 +139,9 @@ aws iam list-open-id-connect-providers
 ### Step-03-01: Update Workflow File
 
 Edit `.github/workflows/build-push-ui.yaml` and update the **role ARN**:
+
+Update your branch name during push image stage
+
 ```yaml
 - name: Configure AWS credentials via OIDC
   uses: aws-actions/configure-aws-credentials@v4
@@ -148,3 +151,16 @@ Edit `.github/workflows/build-push-ui.yaml` and update the **role ARN**:
 ```
 
 **Replace `<ACCOUNT_ID>`** and `role_name` with your actual AWS account ID from Step-02-01.
+
+- This workflow triggers only when there is changes in `src/ui/src/` only.
+
+- So made changes and push it.
+
+- Go to Github > Actions and varify workflow
+
+![alt text](wf.png)
+
+- Varify Docker Image pushed in your ECR
+
+![alt text](ecrv.png)
+

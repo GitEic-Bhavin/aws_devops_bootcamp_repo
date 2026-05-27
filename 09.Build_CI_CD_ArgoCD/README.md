@@ -224,3 +224,53 @@ argocd account update-password
 ```
 
 > You must be logged in (`argocd login`) before running this.
+
+## Step 7: Register your git repo to ArgoCD
+
+```bash
+# Template: Register Your GitHub Repo with ArgoCD
+argocd repo add https://github.com/stacksimplify/aws-devops-github-actions-ecr-argocd3.git \
+  --username <your-github-username> \
+  --password <your-personal-access-token> \
+  --name aws-devops-github-actions-ecr-argocd3
+
+
+argocd repo add https://github.com/stacksimplify/aws-devops-github-actions-ecr-argocd3.git \
+  --username GitEic-Bhavin \
+  --password <Your_PAT_Token_Here> \
+  --name aws-devops-github-actions-ecr-argocd3  
+```
+
+
+## Step 8: Create ArgoCD Applications
+
+```yml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ui # This is application  name 
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/GitEic-Bhavin/aws_devops_bootcamp_repo.git'
+    targetRevision: master
+    path: src/ui/chart/
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
+## Step 9: Deploy ArgoCD Apps
+
+```bash
+kubectl apply -f argocd-manifests/application-ui.yaml
+```
+
+![alt text](argocd.png)

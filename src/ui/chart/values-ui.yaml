@@ -8,7 +8,7 @@
 image:
   repository: 454143665149.dkr.ecr.ap-south-1.amazonaws.com/bhavin-ecr-retail-store/ui
   pullPolicy: IfNotPresent
-  tag: sha-73bf29b
+  tag: sha-00c0a3d
 
 
 # ----------------------------------------------------------------------------

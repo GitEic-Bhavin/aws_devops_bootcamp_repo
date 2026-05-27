@@ -4,18 +4,18 @@ data "aws_vpc" "exist" {
   id = var.vpc_id
 }
 
-resource "aws_subnet" "public" {
-  vpc_id                  = data.aws_vpc.exist.id
-  # cidr_block              = "10.0.11.0/24"
-  cidr_block = var.pub_sub_cidr_block
-  availability_zone       = "ap-south-1a"
-  map_public_ip_on_launch = true
+# resource "aws_subnet" "public" {
+#   vpc_id                  = data.aws_vpc.exist.id
+#   # cidr_block              = "10.0.11.0/24"
+#   cidr_block = var.pub_sub_cidr_block
+#   availability_zone       = "ap-south-1a"
+#   map_public_ip_on_launch = true
 
-  # tags = {
-  #   Name = "BhavinBhavsar-01-pub-subnet"
-  # }
-  tags = var.pub_sub_name
-}
+#   # tags = {
+#   #   Name = "BhavinBhavsar-01-pub-subnet"
+#   # }
+#   tags = var.pub_sub_name
+# }
 
 # resource "aws_subnet" "private" {
 #   vpc_id            = data.aws_vpc.exist.id
@@ -29,6 +29,16 @@ resource "aws_subnet" "public" {
 #   tags = var.pvt_sub_name
 # }
 
+resource "aws_subnet" "public" {
+  for_each = { for idx, az in local.azs : az => local.public_subnets[idx] }
+  vpc_id = data.aws_vpc.exist.id
+  cidr_block = each.value
+  availability_zone = each.key
+  tags = merge(var.tags, {
+    Name = "BhavinBhavsar-pub-sub-${each.key}-${var.environment_name}"
+  })
+}
+
 
 resource "aws_subnet" "private" {
   for_each = { for idx, az in local.azs : az => local.private_subnets[idx] }
@@ -41,7 +51,7 @@ resource "aws_subnet" "private" {
 }
 
 output "aws_public_sub_id" {
-  value = aws_subnet.public.id
+  value = [ for s in aws_subnet.public : s.id ]
 }
 
 output "aws_private_sub_id" {
@@ -111,8 +121,8 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "public" {
-
-  subnet_id      = aws_subnet.public.id
+  for_each = aws_subnet.public
+  subnet_id      = each.value.id
   route_table_id = aws_route_table.public.id
 }
 

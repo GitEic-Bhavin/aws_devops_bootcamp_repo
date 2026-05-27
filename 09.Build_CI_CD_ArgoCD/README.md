@@ -164,3 +164,63 @@ Update your branch name during push image stage
 
 ![alt text](ecrv.png)
 
+Install ArogCD
+---
+
+## Step-01: Create Namespace for ArgoCD
+
+```bash
+kubectl create namespace argocd
+```
+
+## Step-02: Install ArgoCD Core Components
+
+```bash
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+This will installs:
+
+* ArgoCD UI Server
+* Repository Server
+* Application Controller
+* All ArgoCD CRDs
+
+![alt text](arcdpd.png)
+
+
+## Step-03: Access ArgoCD UI Locally (Port Forward)
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+```
+
+Then open your browser:
+
+```
+https://localhost:8080
+```
+
+## Step-04: Get ArgoCD Admin Password
+
+```bash
+# Get ArgoCD Admin Password
+kubectl get secret argocd-initial-admin-secret -n argocd \
+  -o jsonpath="{.data.password}" | base64 --decode && echo
+```
+
+Use username `admin` and the above password to log in to the web UI.
+
+## Step-05: Login via `argocd` CLI (Optional but Recommended)
+- [Install Argo CD CLI](https://argo-cd.readthedocs.io/en/stable/cli_installation/)
+```bash
+argocd login localhost:8080 --username admin --password <copied-password> --insecure
+```
+
+## Step-06: Change the Admin Password
+
+```bash
+argocd account update-password
+```
+
+> You must be logged in (`argocd login`) before running this.

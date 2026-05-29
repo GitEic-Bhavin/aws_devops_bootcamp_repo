@@ -903,3 +903,309 @@ kubectl logs -f -l  app.kubernetes.io/name=adot-logs-collector --max-log-request
 
 ![alt text](cwlogs.png)
 
+###############################
+
+Here is the complete, high-quality documentation based on the provided transcripts. It contains architectural explanations, an end-to-end configuration setup breakdown, and a clean `README.md` that explains your OpenTelemetry (ADOT) Custom Resource YAML manifest in detail.
+
+---
+
+# 📑 Amazon EKS Monitoring with ADOT, AMP, and AMG
+
+## Architecture Overview
+
+The system establishes an end-to-end cloud-native observability pipeline built on open standards:
+
+```
+[EKS Cluster Workloads] 
+       │
+       ▼ (Prometheus Scrape via Annotations / Core Metrics)
+ ┌───────────┐
+ │   ADOT    │ (AWS Distro for OpenTelemetry Collector Deployment)
+ │ Collector │
+ └─────┬─────┘
+       │
+       ▼ (Prometheus Remote Write API via SigV4 Authentication)
+ ┌───────────┐
+ │   AWS     │
+ │ Managed   │ (Amazon Managed Service for Prometheus - AMP)
+ │Prometheus │
+ └─────┬─────┘
+       │
+       ▼ (Cross-Account / Native Data Source Integration)
+ ┌───────────┐
+ │   AWS     │
+ │ Managed   │ (Amazon Managed Grafana - AMG authenticated by IAM Identity Center)
+ │  Grafana  │
+ └───────────┘
+
+```
+
+1. 
+**Metrics Collection:** The AWS Distro for OpenTelemetry (ADOT) Collector runs inside the Amazon EKS Cluster. It is configured with a Prometheus receiver to discover, target, and scrape cluster-level components (API Server, Kubelet, cAdvisor) and custom application workloads based on specialized Pod annotations.
+
+
+2. 
+**Secure Forwarding:** Scraped metrics are buffered and processed in batches by the ADOT collector pipeline and forwarded using the `prometheusremotewrite` exporter to an Amazon Managed Service for Prometheus (AMP) workspace. Requests are securely signed using AWS SigV4 authentication via a cluster Service Account linked to an AWS IAM Role.
+
+
+3. 
+**Visualization & Access Control:** Visualizations are handled by Amazon Managed Grafana (AMG). Users authenticate via AWS IAM Identity Center (formerly AWS SSO) with multi-factor authentication (MFA) enabled. AMG queries the secure AMP data source to populate standard or custom dashboards.
+
+
+
+---
+
+
+# EKS Cluster Monitoring Pipeline: ADOT Collector to Amazon Managed Prometheus (AMP) & Grafana (AMG)
+
+## Prerequisites & Add-ons Checklist
+
+Before deploying the ADOT Collector manifest, ensure the following core dependencies and EKS add-ons are installed and active in your cluster:
+
+* **EKS Pod Identity Agent or IRSA:** Required to bind IAM Roles to Kubernetes Service Accounts.
+
+* **Cert-Manager:** Pre-requisite for installing the ADOT Operator Webhooks.
+
+* **AWS Distro for OpenTelemetry (ADOT) Add-on:** Registers the `OpenTelemetryCollector` Custom Resource Definition (CRD).
+
+* **Metrics Server:** Exposes core Kubernetes resource usage metrics.
+
+* **Kube-State-Metrics:** Generates cluster-level metrics tracking object state (deployments, pods, resource capacities).
+
+* **Prometheus Node Exporter:** Runs as a DaemonSet to capture underlying OS-level host metrics from EC2 worker nodes.
+
+
+### Step 1: Provision Core Infrastructure via Terraform
+Ensure your Terraform deployment creates the underlying AWS monitoring resources:
+* An **Amazon Managed Service for Prometheus (AMP)** workspace.
+* An **Amazon Managed Grafana (AMG)** workspace.
+* An **IAM Role** containing a policy that permits writing to the AMP workspace (`aps:RemoteWrite`, `aps:GetSeries`, `aps:GetLabels`, `aps:GetMetricMetadata`).
+
+### Step 2: Configure EKS Service Account Permissions
+
+The ADOT Collector requires an IAM role to authorize its remote write API requests against AMP using SigV4 signing. 
+
+Bind your IAM Policy to the `adot-collector` Service Account in the `default` namespace using EKS Pod Identity or IRSA.
+
+### Step 3: Apply the OpenTelemetry Collector Configuration
+1. Open your manifest file (`adot-collector-metrics.yaml`) and update the environment variables:
+   * **CLUSTER_NAME:** Provide your exact EKS cluster identifier (e.g., `retail-dev-eksdemo1`).
+   * **AWS_REGION:** Update to the AWS region where your AMP workspace resides (e.g., `us-east-1`).
+
+   * **Endpoint URL:** Inside the `exporters.prometheusremotewrite` block, insert your unique Amazon Prometheus Workspace Remote Write URL.
+
+2. Apply the manifest to your cluster:
+```bash
+   kubectl apply -f adot-collector-metrics.yaml
+```
+
+3. Verify the collector pod starts cleanly:
+
+```bash
+kubectl get pods -n default -l app.kubernetes.io/name=adot-metrics-prometheus
+
+```
+
+
+
+### Step 4: Configure Grafana Authentication via AWS IAM Identity Center
+
+1. Navigate to the **AWS IAM Identity Center** console.
+2. Provision administrative and viewer users (e.g., `Kalyan Reddy`) and enforce Multi-Factor Authentication (MFA).
+3. Open the **Amazon Managed Grafana** console, locate your workspace, and select **Add new user or group**.
+4. Assign the provisioned Identity Center user to the AMG workspace.
+5. **Critical:** Change the user's workspace role from the default **Viewer** to **Admin** to grant dashboard creation and data-source configuration privileges.
+
+### Step 5: Setup Data Sources and Import Dashboards
+
+1. Retrieve the **Grafana Workspace URL** from the AWS console and navigate to it in your web browser.
+2. Click **Sign in with AWS IAM Identity Center**, supply your credentials, and fulfill the MFA challenge.
+3. Once logged in, navigate to **Connections** -> **Data Sources** -> **Add Data Source** and select **Prometheus**.
+4. **Alternative / Efficient Method:** Navigate to **Apps** -> **AWS Data Sources** -> **Amazon Managed Service for Prometheus**. Select your deployment AWS Region. Click on your active Prometheus Workspace ID, and click **Add Data Source**. This configures SigV4 proxying behind the scenes automatically.
+5. Go to the **Dashboards** section, select **Import**, input Community Dashboard ID `15661` (Kubernetes All-in-One Cluster Monitoring), select your newly mapped AMP data source, and click **Import**.
+
+
+
+```yaml
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: adot-metrics-prometheus
+  namespace: default
+spec:
+  mode: deployment
+  replicas: 1
+  serviceAccount: adot-collector 
+
+```
+
+* **apiVersion / kind:** Targets the OpenTelemetry Operator API to provision an isolated instance of the collector binary.
+* **mode: deployment:** Launches the collector container as a standard Kubernetes Deployment. This architecture handles centralized scraping across the entire EKS cluster efficiently.
+* **serviceAccount:** Binds the runtime pod to the `adot-collector` service account, ensuring it inherits AWS IAM privileges to write out to AMP and inspect core cluster resources.
+
+### Resource Allocation & Environment
+
+```yaml
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 300m
+      memory: 512Mi
+  env:
+    - name: CLUSTER_NAME
+      value: "retail-dev-eksdemo1"
+    - name: AWS_REGION
+      value: "us-east-1"
+    - name: NODE_NAME  
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+
+```
+
+* **resources:** Sets strict resource requests and limits to isolate the monitoring footprint and guard against resource exhaustion scenarios.
+* **env:** Injects runtime context variables into the collector. `NODE_NAME` dynamically resolves the underlying node hosting the collector pod utilizing the Kubernetes Downward API.
+
+---
+
+### Engine Configurations (`spec.config`)
+
+The configuration engine manages three operational processing blocks: **Receivers**, **Processors**, and **Exporters**, linked together by logical execution **Pipelines**.
+
+#### 1. Receivers (Data Ingestion)
+
+```yaml
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+```
+
+* **otlp:** Standardizes an ingestion landing point for traces and metrics pushed directly out of custom applications that have been instrumented with the native OpenTelemetry SDK.
+
+```yaml
+      prometheus:
+        config:
+          global:
+            scrape_interval: 30s
+            scrape_timeout: 10s
+            external_labels:
+              cluster: ${CLUSTER_NAME}
+
+```
+
+* **prometheus:** Embeds a fully functional Prometheus scraping engine inside the collector instance.
+* **global:** Instructs the scraping engine to hit discovery endpoints every 30 seconds.
+* **external_labels:** Multi-cluster isolation point. Automatically appends a `cluster: <cluster-name>` tag to every single metric entry scraped by this instance. This enables seamless multi-cluster querying when multiple environments target a single shared AMP/AMG workspace.
+
+##### 🎯 The Nine Core Prometheus Scrape Jobs Explained
+
+The `scrape_configs` block defines exactly **9 separate discovery jobs** configured to automatically map cluster topology and discover endpoints dynamically via Kubernetes Service Discovery (`kubernetes_sd_configs`):
+
+1. **`kubernetes-apiservers`:** Discovers endpoint resources mapped to the secure Kubernetes API server cluster-IP. Authenticates over HTTPS via the mounted service account token (`/var/run/secrets/kubernetes.io/serviceaccount/token`), dropping all irrelevant components to isolate server request metrics and etcd backend latencies.
+
+2. **`kubernetes-nodes`:** Reaches out to the node directory API to scrape structural host-level statistics exposed natively by the internal Kubelet instance.
+
+3. **`kubernetes-nodes-cadvisor`:** Targets the specific `/metrics/cadvisor` path exposed by the node-level Kubelet engine. This extracts critical container-level resource consumption data (CPU shares, active memory footprints, container networking throughput).
+
+4. **`kubernetes-service-endpoints`:** Monitors all endpoints backing standard services. It searches cluster-wide for workloads carrying explicit annotations: `prometheus.io/scrape: "true"`. It automatically honors custom data paths and override ports designated by matching app annotations.
+
+5. **`kubernetes-service-endpoints-slow`:** Identical to the endpoint detection engine detailed above, but engineered specifically for thick or heavy infrastructure applications. It overrides the default collection cycle with a slower **5-minute scrape interval** to protect targets from performance issues.
+
+6. **`prometheus-pushgateway`:** Monitors custom batch or ephemeral short-lived cronjobs that cannot be scraped traditionally, discovering pushgateway instances carrying specific tracking flags.
+7. **`kubernetes-services`:** Probes underlying HTTP network responsiveness, certificate expiration intervals, and endpoint connection failures by interfacing with an explicit blackbox exporter service.
+
+8. **`kubernetes-pods`:** Connects directly to the underlying Pod IP addresses rather than routing through abstract services. It filters out non-running targets (such as `Pending`, `Succeeded`, or `Failed` execution states) to avoid unnecessary network calls, capturing runtime application telemetry from pods carrying standard Prometheus scrape annotations:
+
+```yaml
+metadata:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+
+```
+
+
+9. **`kubernetes-pods-slow`:** A slower fallback iteration targeting individual pod discovery blocks, throttling the polling frequency to a 5-minute interval for designated slow-tier microservices.
+
+---
+
+#### 2. Processors (Data Mutation & Refinement)
+
+```yaml
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+      batch:
+        send_batch_size: 1000
+        timeout: 60s
+      resourcedetection:
+        detectors: [env, eks, ec2, system]
+        timeout: 2s
+
+```
+
+* **memory_limiter:** Acts as a vital safeguard. Tracks active container memory utilization and purposefully drops telemetry datasets before allowing the operating system to issue an Out-of-Memory (OOM) kill command to the collector pod.
+
+* **batch:** Packages individual metrics into a collective block (up to 1,000 items) or holds them up to 60 seconds before initiating an API transmission. This heavily minimizes outbound API overhead, compressing thousands of independent operations into singular network calls to protect AMP endpoints from throttling.
+
+* **resourcedetection:** Automatically queries local runtime environments to stamp outgoing telemetry with descriptive cloud infrastructure metadata tags (EKS cluster IDs, Amazon EC2 instance identifiers, underlying OS descriptors).
+
+---
+
+#### 3. Exporters & Extensions (Data Destination & Auth)
+
+```yaml
+    exporters:
+      prometheusremotewrite:
+        endpoint: "<your_prometheus_ep>"
+        auth:
+          authenticator: sigv4auth
+      debug:
+        verbosity: detailed
+
+    extensions:
+      sigv4auth:
+        region: "us-east-1"
+        service: "aps"
+
+```
+
+* **prometheusremotewrite:** Points directly to your secure AWS Prometheus cloud instance endpoint to ship off telemetry records permanently.
+
+* **sigv4auth (Extension):** Implements AWS Signature Version 4 protocol parameters. Intercepts outgoing data frames from the `prometheusremotewrite` engine and injects valid cryptographic authorization headers using the localized service account's role profile.
+
+* **debug:** Provides full logs tracking incoming metadata and pipeline operations.
+
+
+#### 4. Service Pipelines (The Data Routing Engine)
+
+```yaml
+    service:
+      extensions: [health_check, pprof, zpages, sigv4auth]
+      pipelines:
+        metrics:
+          receivers: [otlp, prometheus]
+          processors: [memory_limiter, resourcedetection, batch]
+          exporters: [prometheusremotewrite, debug]
+```
+
+* **extensions:** Activates standard system checking helpers alongside the AWS IAM SigV4 validation adapter.
+* **pipelines.metrics:** Orchestrates data flow. The collector links components together using a strict execution order. For example, telemetry passes through the `memory_limiter` first to safeguard resources, then through the enrichment and batching stages, before finally shipping out to your remote AWS Prometheus cloud backend.
+
+**NOTE**
+
+* **The Importance of External Labels:** If you handle multiple EKS clusters in an enterprise setup, **always** ensure the `external_labels` block maps the `${CLUSTER_NAME}` variable[cite: 1009, 1010]. [cite_start]When multiple collectors write back into a singular centralized AMP workspace, this parameter provides multi-tenant filtering in Grafana dashboard dropdowns[cite: 1010, 1013].
+
+* **Processor Execution Order Matters:** In the pipeline definition, `memory_limiter` must always appear **first** among the active processors[cite: 759, 760].
+
+* **If telemetry streams spikes dramatically, the container needs to intercept and drop metrics before processing or batching allocations exhaust memory resources and trigger an OOM crash[cite: 757, 759]**.

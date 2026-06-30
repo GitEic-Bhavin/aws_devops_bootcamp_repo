@@ -21,3 +21,5 @@
 06.Karpenter_Controller/*.tfstate*
 07.HPA/1.Metrics_Server_AddOns/.terraform*
 07.HPA/1.Metrics_Server_AddOns/*.tfstate*
+
+bootcamp_interview.txt

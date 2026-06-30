@@ -23,3 +23,4 @@
 07.HPA/1.Metrics_Server_AddOns/*.tfstate*
 
 bootcamp_interview.txt
+*.sh

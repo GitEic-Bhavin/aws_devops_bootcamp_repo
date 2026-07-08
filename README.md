@@ -742,3 +742,875 @@ A: CRL = full list, downloaded periodically. OCSP = single-certificate query, ne
 
 ```bash
 aws acm-pca revoke-certificate --certificate-authority-arn <Your_ACM_Private_CA_ARNs> --certificate-serial <Your_ACM_Cert_Sr_Number> --revocation-reason <Enter reasons>
+```
+
+
+Basic IAM
+---
+
+```json
+// Policy
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DescribeAvailabilityZones",
+                "ec2:DescribeInstances",
+                "ec2:DescribeInstanceTypes",
+                "ec2:DescribeSnapshots",
+                "ec2:DescribeTags",
+                "ec2:DescribeVolumes",
+                "ec2:DescribeVolumesModifications",
+                "ec2:DescribeVolumeStatus"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateSnapshot",
+                "ec2:ModifyVolume"
+            ],
+            "Resource": "arn:aws:ec2:*:*:volume/*"
+        }
+      ]
+}
+   
+// Trust Policy
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "pods.eks.amazonaws.com"
+            },
+            "Action": [
+                "sts:AssumeRole",
+                "sts:TagSession"
+            ]
+        }
+    ]
+}
+```
+
+- This is trust policy where we used STS:AssumeRole.
+- This roles will be assumed by whatever you defined in `Principles` like user, svc ARNs.
+
+- Here `Priciple` is `pods.eks.amazonaws.com` which is pods insides in eks.
+
+- In Policy whatever you given policy it will assumed by this pods.
+
+## Cross Account Resource Access
+
+- Acc A has S3
+
+- Acc B want to Read this Acc A S3
+
+### In Acc A
+
+- Create Trust Policy to ensure who will assume this role which is defined in `Principles` like `user`, `svc`.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::222222222222:root"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+
+- Create or Attach S3 Read Policy to this roles.
+
+```json
+{
+  "Effect": "Allow",
+  "Action": "s3:GetObject",
+  "Resource": "arn:aws:s3:::my-bucket/*"
+}
+```
+
+This Roles ARNs is `"arn:aws:iam::111111111111:role/CrossAccountS3ReadRole"`.
+
+
+
+### In Acc B
+
+- Create a policy to ask for permisions of Role created in Acc A.
+
+```json
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			  "Effect":"Allow",
+			  "Action":"sts:AssumeRole",
+			  "Resource":"arn:aws:iam::111111111111:role/CrossAccountS3ReadRole"
+		}
+	]
+}
+```
+
+## Practice Q&A
+ 
+**Q1: What's the difference between a Trust Policy and a Permission Policy?**
+> Trust policy defines who can assume the role (attached to the role, acts like a resource policy). Permission policy defines what the role can do once assumed. Both must align for access to work.
+ 
+**Q2: Why would you never put long-term access keys in an ECS task or Lambda function?**
+> Long-term keys don't rotate automatically, are easy to leak in code/logs/images, and if compromised give indefinite access. IAM roles give short-lived, auto-rotating credentials scoped to the task's lifecycle, and every assumption is logged in CloudTrail with context.
+ 
+**Q3: Walk me through cross-account access setup end to end.**
+> Trust policy in target account (who can assume) → assume-role permission in source account (who can call) → STS AssumeRole call → temp credentials returned → caller uses temp creds bound by target role's permission policy. Mention External ID if it's a third-party scenario.
+ 
+**Q4: What's the difference between ECS Task Role and Task Execution Role?**
+> Execution role = ECS agent's permissions (pull image, push logs, fetch secrets at container start). Task role = the application's runtime permissions for AWS API calls.
+ 
+**Q5: A user says "AccessDenied" even though the IAM policy looks correct. What do you check?**
+> Check in order:
+> 1. Explicit Deny anywhere (SCPs at Org level, permission boundaries, resource-based policies) — explicit deny always wins.
+> 2. Trust policy if it's a role.
+> 3. Resource-based policy on the target resource (e.g., S3 bucket policy) — for cross-account, both identity policy AND resource policy must allow.
+> 4. Condition key mismatches (IP restriction, MFA requirement, PrincipalOrgID).
+> 5. Use IAM Access Analyzer / Policy Simulator to debug.
+ 
+**Q6: What is a Service Control Policy (SCP) and how does it differ from IAM policy?**
+> SCP is applied at AWS Organizations level, sets the maximum permission boundary for all accounts under it — it can't grant permissions, only restrict. IAM policies grant/deny within an account. Even if IAM allows something, an SCP deny at the org level overrides it.
+ 
+**Q7: What's a permissions boundary and when would you use it?**
+> A managed policy that sets the max permissions an IAM entity can have, regardless of what identity policies grant. Used to let teams create their own roles safely without escalating privileges (e.g., a CI/CD pipeline creating roles for itself, capped by a boundary).
+ 
+**Q8 (Scenario): "Your ECS container needs to access an S3 bucket in another AWS account. Design it."**
+> Combine ECS Task Role + Cross-Account trust pattern: Task Role in your account has permission to `sts:AssumeRole` into a role in the target account; that role's trust policy allows your Task Role's ARN as principal; that role has S3 permissions.
+> Simpler alternative (same-org): add a bucket policy in the target account allowing your Task Role ARN directly — S3 supports resource policies directly, no assume-role needed.
+
+ECS + Fargate
+---
+
+Cluster - To run ECS Nodes we will requires cluster where all my tasks , svc will executes.
+
+- While we create cluster - we are defining `CPU`, `Memory`. `4 vcpu`, `2 GiB Memory`.
+
+- Based on this cpu and memory it will create a Node EC2 which will have this 4 vcpu and 2 GiB Memmory.
+
+- In this nodes our Tasks and svc will executes.
+
+- Whatever you defined CPU and Memory in this cluseter it will used by `Task Definitions`.
+
+Task Definitions
+
+  - **Task Size** - We mentions CPU and Memory in this Task Size. Task Size may have no of containers. So if you write 2 cpu and 2 Gib Memory in this `Task Size` and In containers you defined `1 Vcpu` and `1 Gib Memory` for `Container A`. `In Container B` you also uses `1 vCPU` and `1 Gib Memory` it will used from this `Task Size`. 
+
+  - Now Your Task size has exhasted. Now here `Service Auto Scaling` will work. It will create new containers.
+
+  - It will consume your EC2 Instance resources == Your ECS Nodes resources.
+
+  - If your ECS Nodes Instance resources has exhasted your new Task will always goes into Pending State.
+  - Bcz There is no more Memory and CPU is available.
+
+  - Here `Cluster == ECS Nodes Auto Scaling/Cluster Auto Scaling work`. It will Scale your ECS Nodes and Rest of Pending state task will schedule in this new Nodes.
+
+  - If you have Managed EC2 Instance - You don't requires to create Cluster Auto Scaling - AWS will manage itself.
+
+  - If you have Self-Managed EC2 Instance - You must have to create Cluster Auto Scaling by below steps:
+
+  ## How to create Cluster Auto Scaling (Classic)
+  - Create an Auto Scaling Group.
+
+  - Launch an ECS-optimized AMI.
+
+  - Create an ECS Capacity Provider.
+
+  - Attach the Auto Scaling Group to the Capacity Provider.
+
+  - Enable:
+    - Managed Scaling = ON
+
+    - Managed Termination Protection = ON
+
+  - Attach the Capacity Provider to the ECS Cluster.
+
+  - Create your ECS Service using the Capacity Provider Strategy instead of Launch Type.
+
+```
+Pending Task
+
+↓
+
+Capacity Provider
+
+↓
+
+Auto Scaling Group
+
+↓
+
+Launch EC2
+
+↓
+
+EC2 registers with ECS
+
+↓
+
+Task starts
+```
+
+## What is an ECS capacity provider? 
+
+
+It is a strategy that tells ECS where and how to run your tasks.
+
+Think of ECS like a logistics manager.
+
+ECS Scheduler
+
+```
+"I have a new task."
+
+↓
+
+Where should I run it?
+```
+
+It asks the `Capacity Provider`.
+
+The Capacity Provider answers:
+
+```
+Run on:
+
+✓ Fargate
+
+or
+
+✓ Fargate Spot
+
+or
+
+✓ EC2 Auto Scaling Group A
+
+or
+
+✓ Managed Instances
+```
+
+## Without Capacity Provider
+
+```
+Task
+
+↓
+
+Launch Type = EC2
+
+↓
+
+Find an EC2 instance
+
+↓
+
+Run Task
+```
+
+- So `Capacity Provider`  will tell - which Tasks should runs where like `On-EC2`, `On-Fargate`, `On-Fargate-Sport`.
+
+- **During Creating Service, If you choose any one of this Capacity Provider like On-EC2 Capacity Provider, `If there is new Tasks it will be run on this` On-EC2**.
+
+- `If you had created service` with `On-Fargate` , your new task will be scheduled on the `On-Fargate` Only.
+
+## What if there are multiple-capacity in your created services
+
+![alt text](cpm.png)
+
+- You can see here `weight is set to 1` for eacg capacity provider.
+
+- That means, if you have 6 Tasks , so it will be run like this
+
+```
+EC2 - Task 1
+
+On-Fargate - Task 2
+
+On-Fargtate Sport - Task 3
+
+EC2 - Task 4
+
+On-Fargate - Task 5
+
+On-Fargate  Spot - Task 6
+```
+
+- So, if there are 6 tasks, `2 Tasks` will runs on `EC2` , `2 Tasks` will runs on `On-Fargate`, and `2 Tasks` will runs on `On-Fargate Spot`.
+
+### What if ECS EC2 Nodes Instance has no resources ?
+
+- So, ECS have managed and self-managed and Fargate CP.
+
+- If you have **Managed CP**, You will not requires to do anythings.
+- AWS will manage this **Cluster Auto Scaling**.
+
+- If you have **Self-Managed CP**, You will must requires to create `Cluster Auto Scaling`.
+
+- If you have **Fargate CP**, AWS provisions more compute automatically (subject to account quotas and regional capacity). No Cluster Auto Scaling to configure.
+
+| Capacity Provider     | Who manages compute? | If CPU/Memory is full, what happens?                                                                                               |
+| --------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Fargate**           | AWS                  | AWS provisions more compute automatically (subject to account quotas and regional capacity). No Cluster Auto Scaling to configure. |
+| **Managed Instances** | AWS                  | AWS manages the EC2 instances and scales them as needed. You don't configure Cluster Auto Scaling yourself.                        |
+| **Self-managed EC2**  | You                  | You must configure an Auto Scaling Group + Capacity Provider with Managed Scaling (Cluster Auto Scaling).                          |
+
+
+
+## Exalplain how to get ✅ Zero-downtime deployments
+
+
+
+## Deployments
+
+
+**Rolling update (default)**: replaces tasks gradually, respects minimumHealthyPercent / maximumPercent to control how many old/new tasks run simultaneously.
+
+**Blue/Green (via CodeDeploy)**: spins up a full new task set, shifts traffic (all-at-once or canary), auto-rollback on failed health checks — the "SRE-grade" answer when asked about safe deploys.
+
+**Circuit breaker**: ECS can auto-rollback a deployment if new tasks keep failing health checks — good to mention, shows production maturity.
+
+### Q2: Fargate vs EC2 launch type — when would you choose each?
+
+- Fargate for simplicity/no ops overhead/bursty workloads. EC2 for cost efficiency at steady high scale, GPU needs, or host-level control.
+
+
+### Q3: How does an ECS Fargate task get a public IP or reach the internet?
+
+- If in a public subnet with assignPublicIp: ENABLED, it gets a public IP directly. If in a private subnet, it needs a NAT Gateway for outbound internet, or VPC endpoints for AWS service calls without internet at all.
+
+### Q-4 How do you achieve zero-downtime deployment in ECS?
+
+- Rolling update with `minimumHealthyPercent: 100`, `maximumPercent: 200` ensures new tasks are healthy before old ones are killed, combined with ALB health checks and deployment circuit breaker for auto-rollback. 
+
+- For higher safety, use CodeDeploy Blue/Green with canary traffic shifting.
+
+### Q-5 What does cricuit breaker for zero-downtime ?
+
+- `circuit breaker`
+
+| Feature                               | Rolling Update          | Deployment Circuit Breaker |
+| ------------------------------------- | ----------------------- | -------------------------- |
+| Deploy new version                    | ✅ Yes                   | ❌ No                       |
+| Replace tasks gradually               | ✅ Yes                   | ❌ No                       |
+| Maintain availability (zero downtime) | ✅ Yes                   | ❌ No                       |
+| Monitor deployment health             | Basic ECS health checks | ✅ Yes                      |
+| Detect deployment failure             | ❌ Not intelligently     | ✅ Yes                      |
+| Automatically rollback                | ❌ No                    | ✅ Yes                      |
+
+
+
+Interview favorite: "Your Fargate task is stuck in PENDING and can't pull the image. Why?"
+
+> Usually networking: task is in a private subnet with no NAT Gateway and no VPC endpoints for ECR/S3 → can't reach ECR to pull the image or CloudWatch Logs to write logs. Fix: add NAT Gateway or VPC endpoints (com.amazonaws.region.ecr.dkr, ecr.api, s3, logs).
+
+
+
+
+Q-14 How would you design multi-region failover? Active-active vs active-passive tradeoffs?
+
+A-14 This question asks how you would design a system to keep your application running if an entire AWS geographical area (Region) completely goes down.
+
+Here is the breakdown of the question, the tradeoffs, and the example so you can easily understand it for the first time.
+
+------------------------------
+## Part 1: The Core Design (How it Works)
+
+Think of an AWS Region as a physical data center. ECS and Fargate only live inside one specific region. If that region loses power or internet, your app dies.
+
+To fix this, you must build a mirror image:
+
+1. **The Compute Layer:** You spin up an identical ECS Cluster and Fargate services in a second AWS Region (e.g., Region A is Virginia, Region B is Oregon).
+2. **The Traffic Cop (Route 53):** You use AWS Route 53 (DNS) to monitor your app. It constantly checks: "Is Region A healthy?" If Region A dies, Route 53 automatically sends users to Region B.
+3. **The Hard Part (The Data):** Containers are easy to duplicate, but data is hard. Your database must constantly copy itself across regions using tools like Aurora Global Database or DynamoDB Global Tables so both regions have the exact same information.
+
+------------------------------
+## Part 2: Active-Passive vs. Active-Active (The Tradeoffs)
+
+Imagine you own a restaurant and want a backup plan in case it floods.
+
+### 🏢 Active-Passive (The Backup Restaurant)
+
+* **What it is:** Your main restaurant (Active) is open. Your backup restaurant (Passive) is locked, dark, and empty.
+* **The Good:** It is cheaper (you aren't paying for staff/electricity in the backup) and simpler (no one is mixing up orders between two locations).
+* **The Bad (RTO):** If the main restaurant floods, it takes time to drive to the backup, unlock the doors, and turn on the kitchen. In tech, this delay is called RTO (Recovery Time Objective). Because it takes 1 to 5 minutes for Route 53 to notice the crash and update its records, you will experience a brief outage.
+
+### 🏪 Active-Active (Two Open Restaurants)
+
+* **What it is:** Both restaurants are open at the same time. Half your customers go to Restaurant A, half go to Restaurant B.
+* **The Good:** If Restaurant A floods, customers simply walk over to Restaurant B. There is zero downtime (Near-zero RTO).
+* **The Bad:** It doubles your costs because you are running two full operations. It also creates data chaos (Split-Brain Risk). If a customer buys the very last item in Restaurant A at the exact same millisecond someone buys it in Restaurant B, your system breaks. Your app must be smart enough to handle these data conflicts.
+
+------------------------------
+## Part 3: The Real-World Recommendation
+
+The answer concludes with a realistic piece of advice for most companies: Don't over-engineer.
+
+Full Active-Active is incredibly difficult and expensive. Unless you are a giant like Netflix, the answer recommends a hybrid approach: Active-Passive with a "Warm" Standby.
+
+* **The Strategy:** Run your main region at 100%. In your backup region, keep the database synced, but only run 1 or 2 small containers (just enough to keep it "warm").
+* **The Failover:** If the main region crashes, an automated script instantly tells AWS to scale those 2 containers up to 50 containers to handle the traffic. This strikes a perfect balance between saving money and recovering quickly.
+
+## Q-22 How do you get container-level logs/metrics without host access?
+
+This is another **very common SRE interview question**, but the explanation in books is often too theoretical.
+
+Let's understand it as if you're working in production.
+
+
+> **How do you get container logs and metrics in ECS/Fargate without logging into the server?**
+
+Your first thought should be:
+
+> **Wait... where is the server?**
+
+For **Fargate**, there is **no server that you own**.
+
+```text
+Developer
+
+↓
+
+ECS Task
+
+↓
+
+AWS Fargate
+```
+
+You **cannot SSH** into the underlying machine because AWS manages it.
+
+So the question becomes:
+
+> **If I can't access the server, how do I see logs and metrics?**
+
+Suppose your application is running.
+
+```text
+Spring Boot App
+
+↓
+
+Container
+```
+
+Inside the container, the application is continuously producing:
+
+```text
+Application
+
+↓
+
+INFO User Logged In
+
+↓
+
+INFO Payment Success
+
+↓
+
+ERROR Database Timeout
+
+↓
+
+WARN Memory High
+```
+
+These are **logs**.
+
+At the same time, the container is consuming:
+
+```text
+CPU = 70%
+
+Memory = 60%
+
+Network = 120 Mbps
+```
+
+These are **metrics**.
+
+### Normally (Traditional VM)
+
+If this were a Linux server,
+
+You would SSH into it.
+
+```bash
+ssh ec2-user@server
+```
+
+Then
+
+```bash
+cat /var/log/app.log
+```
+
+or
+
+```bash
+top
+```
+
+or
+
+```bash
+docker logs
+```
+
+Easy.
+
+### But in Fargate...
+
+There is **no SSH**.
+
+```text
+AWS
+
+↓
+
+Hidden Server
+
+↓
+
+Your Container
+```
+
+AWS says
+
+> "You cannot access my server."
+
+So how do you see logs?
+
+### Method 1 — awslogs (Most Common)
+
+Imagine your application prints
+
+```text
+Application
+
+↓
+
+stdout
+
+↓
+
+Hello
+
+↓
+
+User Login
+
+↓
+
+Database Error
+```
+
+The **awslogs log driver** simply copies everything written to **stdout/stderr** and sends it to **CloudWatch Logs**.
+
+```text
+Application
+
+↓
+
+stdout/stderr
+
+↓
+
+awslogs Driver
+
+↓
+
+CloudWatch Logs
+```
+
+You never SSH.
+
+You just open CloudWatch.
+
+## Example
+
+Your application prints
+
+```java
+System.out.println("User Login");
+```
+
+or
+
+```python
+print("Payment Success")
+```
+
+Those messages automatically appear in CloudWatch Logs if you've configured the `awslogs` log driver in the task definition.
+
+## Method 2 — FireLens
+
+Now suppose your company doesn't use CloudWatch.
+
+Instead they use
+
+* Datadog
+* Splunk
+* Elasticsearch
+* S3
+
+Now what?
+
+Instead of sending logs directly to CloudWatch,
+
+AWS inserts another container.
+
+```text
+Application Container
+
+↓
+
+FireLens Container
+
+↓
+
+Datadog
+```
+
+FireLens acts like a **post office**.
+
+Application says
+
+> Here are my logs.
+
+FireLens says
+
+> I'll deliver them wherever you want.
+
+---
+
+Example
+
+```text
+Application
+
+↓
+
+FireLens
+
+↓
+
+Datadog
+```
+
+or
+
+```text
+Application
+
+↓
+
+FireLens
+
+↓
+
+Splunk
+```
+
+or
+
+```text
+Application
+
+↓
+
+FireLens
+
+↓
+
+Elastic
+```
+
+
+Logs tell us
+
+> **What happened?**
+
+Metrics tell us
+
+> **How healthy is the application?**
+
+For example
+
+```text
+CPU
+
+Memory
+
+Network
+```
+
+## Method 1 — Container Insights
+
+AWS already collects
+
+```text
+Task CPU
+
+Task Memory
+
+Cluster CPU
+
+Network
+
+Running Tasks
+```
+
+These are displayed in
+
+```text
+CloudWatch
+
+↓
+
+Container Insights
+```
+
+Again
+
+No SSH
+
+No agent installation
+
+AWS collects them automatically once Container Insights is enabled.
+
+Suppose your API is slow.
+
+CPU looks fine.
+
+Memory looks fine.
+
+You want to know
+
+> Which function is slow?
+
+Container Insights cannot answer that.
+
+You need **APM (Application Performance Monitoring).**
+
+### Sidecar Pattern
+
+Imagine your task contains
+
+```text
+Task
+
+├── My Application
+└── Datadog Agent
+```
+
+The Datadog Agent is called a **sidecar container**.
+
+It lives inside the same ECS Task.
+
+It collects
+
+* traces
+* custom metrics
+* service map
+* exceptions
+
+and sends them to Datadog.
+
+Architecture
+
+```text
+          ECS Task
+ ┌─────────────────────────────┐
+ │                             │
+ │ Application Container       │
+ │        │                    │
+ │        ▼                    │
+ │ Datadog Agent Sidecar       │
+ │        │                    │
+ └────────┼────────────────────┘
+          │
+          ▼
+      Datadog Cloud
+```
+
+### Why Sidecar?
+
+Because on Fargate
+
+❌ You cannot install software on the host.
+
+On EC2 you might install:
+
+```bash
+Datadog Agent
+```
+
+directly on the VM.
+
+On Fargate
+
+No VM access.
+
+So the monitoring agent itself runs as another container.
+
+```text
+                 ECS Task
+
+      ┌─────────────────────────┐
+      │                         │
+      │  Application            │
+      │                         │
+      │  Logs                   │
+      │      │                  │
+      │      ▼                  │
+      │ FireLens Sidecar        │
+      │      │                  │
+      │      ▼                  │
+      │ Datadog                 │
+      │                         │
+      │ CPU Memory Traces       │
+      │      │                  │
+      │      ▼                  │
+      │ Datadog Agent Sidecar   │
+      │      │                  │
+      └──────┼──────────────────┘
+             │
+             ▼
+       Datadog Dashboard
+```
+
+### Real Production Example
+
+Suppose a customer says:
+
+> **"Payments are failing."**
+
+As an SRE, here's what you do:
+
+1. Open **Datadog**.
+2. Look at **APM traces** from the Datadog Agent sidecar.
+3. Find that `/payment` API is taking 8 seconds.
+4. Open the **logs** routed by FireLens.
+5. See repeated `Database timeout` errors.
+6. Conclude the issue is with the database, not ECS.
+
+Notice that **you never SSH into any server**. Everything you need comes from logs, metrics, and traces collected automatically or via sidecar containers.
+
+### Interview Answer (Simple & Natural)
+
+> **"In Fargate, I don't have host access because AWS manages the underlying infrastructure. For logs, I configure the `awslogs` log driver to send container stdout and stderr to CloudWatch Logs. If the organization uses external observability platforms like Datadog or Splunk, I use FireLens with Fluent Bit to route logs there. For infrastructure metrics such as CPU, memory, and network, I enable CloudWatch Container Insights. For application-level traces and custom metrics, I run a monitoring agent such as the Datadog Agent as a sidecar container within the ECS task, since I can't install agents on the host."**

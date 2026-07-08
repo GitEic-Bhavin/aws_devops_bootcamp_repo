@@ -416,7 +416,7 @@ Common production use cases:
 # AWS Services Related to mTLS
 
 | AWS Service               | Usage                                                        |
-|                 - |                                          |
+| ------------------------- | ------------------------------------------------------------ |
 | AWS IoT Core              | Device Authentication                                        |
 | Application Load Balancer | Client Certificate Authentication (supported configurations) |
 | API Gateway               | Client Certificate Authentication (supported scenarios)      |
@@ -454,7 +454,7 @@ Examples:
 # mTLS vs HTTPS
 
 | HTTPS                          | mTLS                                                     |
-|                      |                                     -- |
+| ------------------------------ | -------------------------------------------------------- |
 | Only server is authenticated   | Both client and server are authenticated                 |
 | Suitable for public websites   | Suitable for internal secure systems                     |
 | Browser is the client          | Machines or trusted applications are usually the clients |

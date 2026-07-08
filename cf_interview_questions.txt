@@ -1,0 +1,210 @@
+🔹 AWS CloudFormation — Top 30 Interview Questions for DevOps Engineers
+
+
+What is AWS CloudFormation, and how does it work?
+
+What are the key components of a CloudFormation template?
+  Descriptions - This will help to understand about whole stack like which resources will deploy.
+  Parameters - We can define env names, resource names, db creds here and in resource block we can refer this parameters using !Ref.
+  Mappings - This is stores map value like AMI Id: ap-south-1 based on regions
+  Resources - We can define here about resource to be provisions like vpc, s3 using refering parameters for its name, creds.
+  Outputs - We can expose resources attributes like resource name, its endpoints to be useful by another stack.
+
+
+
+What are Resources, Parameters, Outputs, and Mappings in CloudFormation?
+  Resources - We can define here about resource to be provisions like vpc, s3 using refering parameters for its name, creds.
+  Parameters - We can define env names, resource names, db creds here and in resource block we can refer this parameters using !Ref.
+  Mappings - This is stores map value like AMI Id: ap-south-1 based on regions
+  Outputs - We can expose resources attributes like resource name, its endpoints to be useful by another stack.
+
+
+What is a Stack in CloudFormation?
+  **Group of Resources** is called a **Stack**.
+  This stack will manage all of resources defined under this cloudformation stacks.
+
+If you delete a Stack, will all resources always be deleted ?
+No. If you defined **DeletionPolicy** set to **Retain** in a particular resource block that resource will not be delete. Rest of all resources will be deleted.
+
+What are Nested Stacks, and when would you use them?
+
+
+How does Change Set work in CloudFormation?
+  When you update your stack for a resource like you update ec2 instance Name, This Change Set will detect this update from updated stacks.
+  It will compaire previous stack to this new updated stack for what will be update , what has changed ?
+  It will ask for your approval. Once you varified and approved this, It will provision this updated stack.
+
+  **Without Change Set** If you update somethings it will not show you for what will be update, change, delete, create.
+  It will delete existing resource , you have to recreate it.
+
+```
+Current Stack
+       │
+       ▼
+New CloudFormation Template
+       │
+       ▼
+CloudFormation compares both
+       │
+       ▼
+Creates Change Set
+       │
+       ▼
+Shows exactly what will change
+       │
+       ▼
+You approve
+       │
+       ▼
+Update Stack
+```
+
+What are StackSets, and how are they useful for multi-account or multi-region setups?
+
+  A StackSet allows you to deploy the same CloudFormation stack to multiple AWS accounts and/or multiple AWS regions from a single operation.
+
+| Feature          | Purpose                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| **Stack**        | Deploy infrastructure in **one AWS account and one region**                        |
+| **Nested Stack** | Split one large template into smaller templates                                    |
+| **StackSet**     | Deploy the **same Stack** to **multiple AWS accounts and/or multiple AWS regions** |
+
+
+What are Intrinsic Functions in CloudFormation ?
+OR
+How resources communicate with each other inside a CloudFormation template ?
+
+  Intrinsic Functions are built-in CloudFormation functions that help you dynamically reference, manipulate, or generate values inside a template.
+
+| Function       | Purpose                                          |
+| -------------- | ------------------------------------------------ |
+| `!Ref`         | Reference another resource or parameter          |
+| `!GetAtt`      | Get an attribute of a resource                   |
+| `!Sub`         | Substitute variables into a string               |
+| `!Join`        | Join multiple strings                            |
+| `!FindInMap`   | Read a value from a Mapping                      |
+| `!ImportValue` | Import outputs from another stack                |
+| `!Select`      | Select an item from a list                       |
+| `!Split`       | Split a string into a list                       |
+| `!If`          | Return one value or another based on a condition |
+
+
+
+How do you reference one resource from another within a template ?
+  We reference resources in CloudFormation using intrinsic functions. 
+  The most common ones are !Ref, which returns a resource's default value (such as an ID or name), and !GetAtt, which returns a specific attribute of a resource, such as an ALB DNS name or an RDS endpoint. 
+  If resources are in different CloudFormation stacks, we typically use Outputs with Export in one stack and !ImportValue in another stack.
+
+What are Conditions in CloudFormation, and how are they used ?
+  Conditions in CloudFormation allow us to create resources based on logical expressions. 
+  They evaluate to either true or false during stack creation or update. 
+  This enables us to use a single CloudFormation template for multiple environments, such as development, testing, and production.
+
+```yml
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      - dev
+      - prod
+
+# Create Conditions
+
+Conditions:
+
+  IsProduction:
+    !Equals [ !Ref Environment, prod ]
+
+# IsProduction is a variables
+
+# If Environment = prod, then IsProduction == TRUE
+# Else IsProduction == False
+
+# Use Conditions in the resource block
+
+
+Resources:
+
+  MyDatabase:
+
+    Type: AWS::RDS::DBInstance
+    Condition: IsProduction
+
+```
+
+How do you deploy a CloudFormation stack using the AWS CLI ?
+  1. Validate template
+
+```
+aws cloudformation validate-template \
+  --template-body file://infra.yaml
+```
+
+  2. Create stack
+
+```
+aws cloudformation create-stack \
+  --stack-name dev-stack \
+  --template-body file://infra.yaml
+```
+
+  3. Check Stack Status
+
+```
+aws cloudformation describe-stacks \
+  --stack-name dev-stack
+```
+
+  4. View Stack Events
+
+```
+aws cloudformation describe-stack-events \
+  --stack-name dev-stack
+```
+
+  5. Update Existing Stack
+
+```
+aws cloudformation update-stack \
+  --stack-name dev-stack \
+  --template-body file://infra.yaml
+```
+
+  5. Recommending to Deploy
+
+- It will automatically create stacks if not exists.
+- Update existing stack if it is exist.
+
+```
+aws cloudformation deploy \
+  --template-file infra.yaml \
+  --stack-name dev-stack
+```
+
+What happens when a stack creation fails ?
+
+  If a CloudFormation stack creation fails, CloudFormation automatically initiates a rollback by default. 
+  It deletes the resources that were successfully created during the failed deployment and returns the stack to its previous stable state. 
+  The stack status changes to ROLLBACK_IN_PROGRESS and then ROLLBACK_COMPLETE. 
+  To identify the root cause, we typically review the stack events using aws cloudformation describe-stack-events or check the Events tab in the AWS Console.
+
+How do you handle stack rollbacks?
+
+
+How do you update a CloudFormation stack safely without downtime?
+How can you preview the changes before deployment?
+What’s the difference between Change Set and Drift Detection?
+How do you perform Drift Detection in CloudFormation?
+How can you automate CloudFormation deployments in a CI/CD pipeline?
+How do you handle stack dependencies or cross-stack references?
+How do you delete stacks while retaining specific resources?
+How can you use CloudFormation with AWS CodePipeline or Jenkins?
+What are Custom Resources, and when do you need them?
+How do you use CloudFormation macros or transform functions (like AWS::Include or AWS::Serverless)?
+How do you secure sensitive data (like passwords) in CloudFormation templates?
+How do you integrate CloudFormation with Terraform or Ansible workflows?
+What are the best practices for writing reusable CloudFormation templates?
+How do you version control CloudFormation templates?
+How do you modularize large CloudFormation templates?
+What’s the difference between SAM (Serverless Application Model) and CloudFormation?
+What are the limitations of CloudFormation compared to Terraform?

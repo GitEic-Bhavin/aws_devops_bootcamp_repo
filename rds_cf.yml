@@ -1,0 +1,71 @@
+# Write cloudformations for RDS
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create RDS"
+
+Parameters:
+  DBName:
+    Type: String
+    Default: "bhavindbrds"
+    Description: Name of RDS DB
+
+    
+  DBUserName:
+    Type: String
+    Default: "admin"
+    Description: DB User Name
+    NoEcho: True
+
+  DBPassword:
+    Type: String
+    Default: "admin123"
+    
+  DBInstanceClass:
+    Type: String
+    Default: "db.t3.micro"
+    Description: DB Instance Type
+  
+  AllocateStorage:
+    Type: Number
+    Default: 20
+    Description: Storage in 1 GB for RDS Instances.
+    
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+
+Resources:
+  MyRDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow MySQL InBound Traffic"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          CidrIp: 0.0.0.0/0
+          FromPort: 3306
+          ToPort: 3306
+
+  MyRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      Engine: mysql
+      MasterUsername: !Ref DBUserName
+      MasterUserPassword: !Ref DBPassword
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref AllocateStorage
+      PubliclyAccessible: true
+      VPCSecurityGroups:
+        - !Ref MyRDSSecurityGroup
+      
+      BackupRetentionPeriod: 7
+      DeleteAutomatedBackups: false
+      MultiAZ: false
+      StorageType: gp3
+  
+Outputs:
+  RDSInstanceIdentifier:
+    Value: !Ref MyRDSInstance
+    
+  RDSInstanceEndPoint:
+    Value: !GetAtt MyRDSInstance.Endpoint.Address

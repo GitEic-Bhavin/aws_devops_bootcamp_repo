@@ -282,6 +282,7 @@ With **mTLS**, the server requires a trusted **client certificate** before allow
 # One-Way TLS vs mTLS
 
 | Feature               | HTTPS (TLS) | mTLS        |
+| --------------------- | ----------- | ----------- |
 |                |       -- |       -- |
 | Server Certificate    | ✅           | ✅           |
 | Client Certificate    | ❌           | ✅           |

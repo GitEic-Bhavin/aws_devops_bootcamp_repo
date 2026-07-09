@@ -871,10 +871,67 @@ This Roles ARNs is `"arn:aws:iam::111111111111:role/CrossAccountS3ReadRole"`.
  
 **Q3: Walk me through cross-account access setup end to end.**
 > Trust policy in target account (who can assume) → assume-role permission in source account (who can call) → STS AssumeRole call → temp credentials returned → caller uses temp creds bound by target role's permission policy. Mention External ID if it's a third-party scenario.
+
+  - **Step 1** - Create task role in Account A(current account)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::remote-bucket-in-account-b/*"
+    }
+  ]
+}
+```
+
+  - **Step B** - Create S3 bucket policy in Account B
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowCrossAccountECSTaskRole",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::ACCOUNT_A_ID:role/your-ecs-task-role-name"
+      },
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::remote-bucket-in-account-b/*"
+    }
+  ]
+}
+```
+
+
  
 **Q4: What's the difference between ECS Task Role and Task Execution Role?**
 > Execution role = ECS agent's permissions (pull image, push logs, fetch secrets at container start). Task role = the application's runtime permissions for AWS API calls.
  
+> **Task Role** - Who use it ? - Application container running inside task = task = container. **Task Execution Role** - Who use it ? ECS Agent. While create container in ecs, ecs will inject this ecs agent inside your container. 
+
+> **Purpose Task Role** - Access aws resources by your container/Application code. Ex. Upload/Read/Write image, object into S3 bucket.
+
+| Feature | Task Role | Task Executio Role |
+| ------- | --------- | ------------------ |
+| Who use it ? | You application code inside container | ECS Agent deployed into your ECS nodes |
+| Purpose | Access aws services by your applications for read/write s3, make query on rds etc | Prepares and builds the container environment. |
+| Example | Connect aws services like S3, DynamoDB, SQS, SNS, EventBridge | ECR, CloudWatch Logs to write logs, Secret manager | 
+| Benefit | Removes the hardcoded creds, env | Grants ECS permission to handle system setup. |
+
+![alt text](trter.png)
+
+
+
 **Q5: A user says "AccessDenied" even though the IAM policy looks correct. What do you check?**
 > Check in order:
 > 1. Explicit Deny anywhere (SCPs at Org level, permission boundaries, resource-based policies) — explicit deny always wins.

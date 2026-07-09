@@ -1,0 +1,64 @@
+#  You need to provision an AWS environment consisting of an EC2 instance and an S3 bucket. 
+#  How would you write a CloudFormation template to achieve this?
+
+# An EC2 instance resource of type ‘AWS::EC2::Instance’.
+# An S3 bucket resource of type ‘AWS::S3::Bucket’.
+
+# AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create ec2 and s3"
+
+Parameters:
+  EC2Name:
+    Type: String
+    Default: ec2-test
+
+  S3BucketName:
+    Type: String
+    Default: "tests3bhavins"
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+
+  PubSubId:
+    Type: String
+    Default: "subnet-005ec18c5cdf0cdc3"
+    Description: "Select an existing public Subnet ID in your VPC"
+
+
+Resources:
+  MyNewKeyName:
+    Type: "AWS::EC2::KeyPair"
+    Properties:
+      KeyName: "test-cf-key"
+
+  myEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+
+      ImageId: ami-01a00762f46d584a1
+      InstanceType: t2.micro
+      
+      KeyName: !Ref MyNewKeyName
+
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          SubnetId: !Ref PubSubId
+      Tags: 
+        - Key: "Name"
+          Value: !Ref EC2Name
+        
+      
+  # MyS3Bucket:
+  #   Type: "AWS::S3::Bucket"
+  #   Properties:
+  #     BucketName: !Ref S3BucketName
+
+  #   DependsOn: "myEC2"
+
+Outputs:
+  # S3BucketNames:
+  #   Value: !Ref MyS3Bucket
+  
+  EC2InstancePubIP:
+    Value: !GetAtt myEC2.PublicIp

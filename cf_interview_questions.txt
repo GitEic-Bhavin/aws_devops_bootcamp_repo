@@ -26,6 +26,33 @@ What is a Stack in CloudFormation?
 If you delete a Stack, will all resources always be deleted ?
 No. If you defined **DeletionPolicy** set to **Retain** in a particular resource block that resource will not be delete. Rest of all resources will be deleted.
 
+What are DeletionPolicy in CloudFormations ?
+
+**Delete** - : This is the default behavior if no policy is specified. 
+CloudFormation deletes both the stack and the underlying physical resource along with all its contents.
+
+**Retain** - : CloudFormation deletes the stack, but preserves the physical resource and its data. 
+You will need to manually delete the resource later if you want to avoid continuing to incur charges.
+
+**SnapShot** - : For resources that support backups (like Amazon RDS DB instances or Amazon ElastiCache clusters), CloudFormation creates a snapshot of the resource before deleting it.
+
+```yml
+MyDatabaseResource:
+  Type: AWS::RDS::DBInstance
+  DeletionPolicy: Snapshot
+  Properties:
+    DBInstanceClass: db.t3.micro
+    Engine: mysql
+    MasterUsername: admin
+    MasterPassword: password123
+
+MyS3Bucket:
+  Type: AWS::S3::Bucket
+  DeletionPolicy: Retain
+```
+
+
+
 What are Nested Stacks, and when would you use them?
 
 
@@ -193,11 +220,38 @@ How do you handle stack rollbacks?
 
 How do you update a CloudFormation stack safely without downtime?
 How can you preview the changes before deployment?
+
 What’s the difference between Change Set and Drift Detection?
+**Change Set** - After update the stack, you have to create a change set. which will detact changes and ask for approval.
+Once you approve those changes it will going to provision those changes.
+
+**Drift Detections** - This will only shows the drift between your updated stacks and actual state of your resources.
+Someone has manually changes to your resources , it will detect this changes and show us.
+It will not going to deploy,create,update this changes.
+
+
+
 How do you perform Drift Detection in CloudFormation?
-How can you automate CloudFormation deployments in a CI/CD pipeline?
+Choose your cloudformation stack, go to `stack actions` > `detect drift`.
+To view drift  go to `Stack Actions` > `Drift detect result`.
+
+
+How can you automate CloudFormation deployments in a CI/CD pipeline?\
+
 How do you handle stack dependencies or cross-stack references?
+
 How do you delete stacks while retaining specific resources?
+
+**Method 1** - Use DeletionPolicy `Retain` or `SnapShot`.
+**Method 2** - Use - `--retain-resources` flag during delete stack via aws cli.
+
+```bash
+aws cloudformation delete-stack \
+    --stack-name my-production-stack \
+    --retain-resources MyProductionDatabase MyPersistentBucket
+```
+
+
 How can you use CloudFormation with AWS CodePipeline or Jenkins?
 What are Custom Resources, and when do you need them?
 How do you use CloudFormation macros or transform functions (like AWS::Include or AWS::Serverless)?
@@ -207,4 +261,17 @@ What are the best practices for writing reusable CloudFormation templates?
 How do you version control CloudFormation templates?
 How do you modularize large CloudFormation templates?
 What’s the difference between SAM (Serverless Application Model) and CloudFormation?
+
 What are the limitations of CloudFormation compared to Terraform?
+
+
+| Feature / Limitation | 🛠️ AWS CloudFormation | 🌍 Terraform | Why it matters |
+| :--- | :--- | :--- | :--- |
+| **Supported Providers** | AWS Only. Cannot touch anything outside the AWS ecosystem. | Any Provider. Works with AWS, Azure, GCP, Cloudflare, GitHub, etc. | Terraform lets you manage your entire multi-cloud stack with one tool. |
+| **Language & Logic** | Rigid YAML/JSON. Basic functions only. Loops and complex logic feel clunky. | Rich HCL. Built-in support for clean loops (for_each), conditionals, and string functions. | Terraform requires significantly fewer lines of code to handle complex setups. |
+| **State Management** | Opaque (Hidden). AWS manages it. You cannot directly fix or edit the state if something drifts. | Transparent File. You own the .tfstate file. You can easily import or move resources in code. | Terraform gives you total control to refactor code without destroying live resources. |
+| **Speed & Rollbacks** | Slow Rollbacks. If a stack fails, it automatically spends 15+ mins rolling back before you can try again. | Fast Plans. Immediately shows a clear plan. If an apply fails, it stops exactly where the error occurred. | Terraform has a much faster development and debugging feedback loop. |
+| **Preview Accuracy** | Change Sets. Shows what will change, but can still fail mid-deployment due to hidden errors (like limits). | terraform plan. Real-time API check that explicitly details what will be added, changed, or destroyed. | Terraform's previews are highly reliable and easy to read before making changes. |
+| **Resource Limits** | Hard Limits. Strict AWS rules like a maximum of 500 resources per stack template. | No Limits. The tool itself imposes no limits on template size or resource count. | CloudFormation forces you to split templates up early as your infrastructure grows large. |
+| **Community Modules** | Small Ecosystem. Reusable modules are limited; AWS encourages moving to AWS CDK instead. | Massive Registry. Thousands of pre-built, open-source modules created by the DevOps community. | With Terraform, you rarely write common infrastructure (like standard VPCs) from scratch. |
+

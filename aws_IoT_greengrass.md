@@ -188,3 +188,280 @@ sudo systemctl enable greengrass.service
     ]
 }
 ```
+
+### 4.1 Create components
+
+- You have already installed greengrass software to your test ec2. So its become a IoT Device.
+
+- Now we will run simple Hello.py which will print your name with current time.
+
+- Create `Artifact/` dir and create hello.py
+
+```bash
+mkdir -p ~/environment/GreengrassCore/artifacts/com.example.HelloWorld/1.0.0 && touch ~/environment/GreengrassCore/artifacts/com.example.HelloWorld/1.0.0/hello_world.py
+```
+
+- Edit hello.py
+
+```py
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+import sys
+import datetime
+import time
+
+while True:
+
+    message = f"Hello, {sys.argv[1]}! Current time: {str(datetime.datetime.now())}."
+
+    # Print the message to stdout.
+    print(message)
+
+    # Append the message to the log file.
+    with open('/tmp/Greengrass_HelloWorld.log', 'a') as f:
+        print(message, file=f)
+
+    time.sleep(1)
+```
+
+- Create `Recipe/` where all configuration for your component and help to execute your hello.py
+
+**Recepies** - Will help to execute your hellp.py from local and from repote like S3 bucket.
+
+### 4.2 Create Recipe
+
+```bash
+mkdir -p ~/environment/GreengrassCore/recipes && touch ~/environment/GreengrassCore/recipes/com.example.HelloWorld-1.0.0.json
+```
+
+```py
+{
+   "RecipeFormatVersion": "2020-01-25",
+   "ComponentName": "com.example.HelloWorld",
+   "ComponentVersion": "1.0.0",
+   "ComponentDescription": "My first AWS IoT Greengrass component.",
+   "ComponentPublisher": "Amazon",
+   "ComponentConfiguration": {
+      "DefaultConfiguration": {
+         "Message": "world"
+      }
+   },
+   "Manifests": [
+      {
+         "Platform": {
+            "os": "linux"
+         },
+         "Lifecycle": {
+            "Run": "python3 -u {artifacts:path}/hello_world.py '{configuration:/Message}'\n"
+         }
+      }
+   ]
+}
+```
+
+### 4.3 Publish component
+
+- Publish component recipe into your s3 as zip file and from S3 use this unzip file hello.py to execute on your greengrass IoT Device EC2.
+
+- Go to IoT GreenGrass > Component > Create recipe.
+
+```py
+{
+   "RecipeFormatVersion": "2020-01-25",
+   "ComponentName": "com.example.HelloWorld",
+   "ComponentVersion": "1.0.0",
+   "ComponentDescription": "My first AWS IoT Greengrass component.",
+   "ComponentPublisher": "Amazon",
+   "ComponentConfiguration": {
+      "DefaultConfiguration": {
+         "Message": "world"
+      }
+   },
+"Manifests": [
+      {
+         "Platform": {
+            "os": "linux"
+         },
+         "Lifecycle": {
+            "Run": "python3 -u {artifacts:path}/hello_world.py '{configuration:/Message}'\n"
+         },
+         "Artifacts": [
+            {
+               "URI": "s3://[YOUR BUCKET NAME]/artifacts/com.example.HelloWorld/1.0.0/hello_world.py"
+            }
+         ]
+      }
+   ]
+}
+```
+
+- Upload your zip hello.py on S3.
+
+```bash
+aws s3 cp --recursive ~/environment/GreengrassCore/ s3://$S3_BUCKET/
+```
+
+![alt text](ggcm.png)
+
+### 4.4 Deploy Components
+
+- Go the AWS IoT Core console and select Greengrass devices -> Deployments. Check Deployment for GreengrassQuickStartGroup and click Revise:
+
+![alt text](dc1.png)
+
+- In Step 1 - Specify target, you can leave all values as default.
+
+- In Step 2 - Select components, select the com.example.HelloWorld component. Leave the public component aws.greegrass.Cli checked (otherwise it would be uninstalled).
+
+![alt text](dc2.png)
+
+- In Step 3 - Configure components, select your custom component and choose Configure component:
+
+![alt text](dc3.png)
+
+
+- Leave all other options as default and choose Confirm.
+
+- Review and deploy it.
+
+- **Now go to your EC2 Component VS Code**
+
+- **Execute this to ensure your components is working after deploy**
+
+```bash
+tail -F /tmp/Greengrass_HelloWorld.log
+
+#OutPut
+Hello, this was deployed from AWS IoT Core! Current time: 2023-08-28 07:24:00.406775.
+```
+
+## 5. Publisher and Subscriber
+
+### 5.1 Publisher Implementations
+
+- We will create a DymmySensor which will create a randome nearet value for mean=1000, variance=20.
+
+This data will be shared to `Topic` named `my/topic` GreenGrasssV2 Components.
+
+`Msg` will like this `12 July 2026, 998.10`.
+
+- Create dummy_sensor.py
+
+```py
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+from random import gauss
+
+class DummySensor(object):
+    def __init__(self, mean=1000, variance=20):
+        self.mu = mean
+        self.sigma = variance
+        
+    def read_value(self):
+        return float("%.2f" % (gauss(self.mu, self.sigma)))
+
+if __name__ == '__main__':
+    sensor = DummySensor()
+    print(sensor.read_value())
+```
+
+- Create example_publisher.py
+
+```py
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+import time
+import datetime
+import json
+from awsiot.greengrasscoreipc.clientv2 import GreengrassCoreIPCClientV2
+from awsiot.greengrasscoreipc.model import (
+    PublishMessage,
+    JsonMessage
+)
+from dummy_sensor import DummySensor
+
+TIMEOUT = 10
+publish_rate = 1.0
+
+# Create the IPC client using V2
+ipc_client = GreengrassCoreIPCClientV2()
+
+sensor = DummySensor()
+
+topic = "my/topic"
+
+while True:
+    message = {"timestamp": str(datetime.datetime.now()),
+               "value": sensor.read_value()}
+
+    # In V2, we can directly publish to a topic without creating a request object
+    # Create the JsonMessage and PublishMessage
+    json_message = JsonMessage(message=message)
+    publish_message = PublishMessage(json_message=json_message)
+
+    # Publish directly using the client
+    ipc_client.publish_to_topic(
+        topic=topic,
+        publish_message=publish_message
+    )
+
+    print(f"Message published is {publish_message}")
+    time.sleep(1/publish_rate)
+```
+
+- Create `receipe` folder.
+
+```bash
+mkdir -p ~/environment/GreengrassCore/recipes/ && cd ~/environment/GreengrassCore/recipes/
+touch ~/environment/GreengrassCore/recipes/com.example.Publisher-1.0.0.json 
+```
+
+- Create receipe and use in a publisher components.
+
+- This will installed Pre-Requisites (awsiotsdk, numpy) on each Components IoT Devices using "Script".
+
+- This will run a Publisher Script on a each devices by "Run".
+
+
+
+
+```json
+{
+  "RecipeFormatVersion": "2020-01-25",
+  "ComponentName": "com.example.Publisher",
+  "ComponentVersion": "1.0.0",
+  "ComponentDescription": "A component that publishes messages.",
+  "ComponentPublisher": "Amazon",
+  "ComponentConfiguration": {
+    "DefaultConfiguration": {
+      "accessControl": {
+        "aws.greengrass.ipc.pubsub": {
+          "com.example.Publisher:pubsub:1": {
+            "policyDescription": "Allows access to publish to all topics.",
+            "operations": [
+              "aws.greengrass#PublishToTopic"
+            ],
+            "resources": [
+              "*"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "Manifests": [
+    {
+      "Lifecycle": {
+        "Install": {
+          "Script": "python3 -m venv .venv\n. .venv/bin/activate\npip install pip --upgrade\npip install awsiotsdk numpy",
+          "Timeout": 600
+        },
+        "Run": {
+          "Script": ". {work:path}/.venv/bin/activate\npython3 -u {artifacts:path}/example_publisher.py"
+        }
+      }
+    }
+  ]
+}
+```
+

@@ -570,7 +570,25 @@ Client certificates are required only when the server is configured for mTLS.
 
 It prevents unauthorized clients from communicating with a server by requiring both sides to prove their identities using certificates.
 
-  
+## Q9 - What is Root CA ?
+
+- It is a Higher level of trust. It is a Trusted Organizations for Certificates.
+- Browser comes with Pre-Installed This Root CA from where our browser can varify the Server's side certificates in the normal HTTPS and Mtls.
+
+## Q-10 What is intermediate ca ?
+
+- Instead of the Root CA issuing millions of certificates directly, it delegates that responsibility for Better security, easier certificate management, If an Intermediate CA is compromised, only it needs to be revoked—not the Root CA.
+
+- `Amazon RSA 2048 M03` is a Intermediate ca
+
+- `Amazon Root CA 1` is a Root CA
+
+- Intermediate ca will send by your Applications.
+
+- To see intermediate ca, go to browser
+
+![alt text](itca.png)
+
 
 # Interview Answer
 
@@ -930,6 +948,49 @@ This Roles ARNs is `"arn:aws:iam::111111111111:role/CrossAccountS3ReadRole"`.
 
 ![alt text](trter.png)
 
+**Q5: 
+
+**Ans**
+
+- I will use **EC2 Launch Type**. This allows us to run **Multiple tasks can run on same EC2 Instance ECS Node**, allow me to optimze that ECS Node's resource usage and share instance across multiple tasks.
+
+- This approach helps in **reducing costs** compared to the **Fargate Launch Type**, Where each tasks runs in its owned isolated environment with dedicated resources.
+
+**Q6 An application running as a service on ECS Fargate is experiencing high network latency. How do you troubleshoot and optimize its network performance ?**
+
+#### 1. Traffic Analysis & Telemetry
+* **Enable VPC Flow Logs:** Capture and analyze IP traffic flowing to and from network interfaces in your VPC to locate routing or performance bottlenecks.
+* **Monitor CloudWatch Metrics:** Audit network throughput metrics (`NetworkIn` and `NetworkOut`) to ensure tasks aren't hitting unexpected threshold limits.
+
+#### 2. Firewall & Security Configuration
+* **Verify Security Groups & NACLs:** Inspect configurations to confirm that health checks, internal microservice communication, or external traffic aren't hitting restrictive rules or causing unnecessary connection retries.
+
+#### 3. Performance Optimization (Alternative Infrastructure)
+* **Switch to ECS with EC2 Launch Type:** Fargate tasks run in an isolated environment with specific resource provisions. For extremely low-latency requirements, migrate the service to an EC2 launch type.
+* **Implement Cluster Placement Groups:** Deploy the underlying EC2 instances inside a **cluster placement group** to ensure they are packed closely together within the AWS hardware fabric, achieving low-latency, high-throughput network performance.
+
+| Placement Group Type | Physical Rack Allocation | Primary Use Case | Max Instances / Limits | Network Performance |
+| :--- | :--- | :--- | :--- | :--- |
+| **Cluster** | Same physical rack / cluster inside a single AZ | HPC, distributed ML, ultra-low latency tasks | Limited by rack physical capacity | Lowest latency, highest throughput |
+| **Spread** | Distinct physical rack for every single instance | Critical standalone nodes needing high isolation | Max 7 running instances per AZ | Standard AZ network speed |
+| **Partition** | Distributed partitions; partitions never share racks | Large distributed databases (Cassandra, HDFS, Kafka) | Max 7 partitions per AZ | Standard cross-partition network speed |
+
+**Q7 You need to deploy a service on ECS and ensure zero downtime during deployments. How would you configure this ?**
+
+### Resolution Strategy
+
+* **Rolling Updates:** Configure the ECS service with a rolling update deployment type. Define the `minimumHealthyPercent` (e.g., 100%) and `maximumPercent` (e.g., 200%) parameters. This forces ECS to spin up new tasks and verify their health before terminating old tasks.
+* **Blue/Green Deployments via AWS CodeDeploy:** Route traffic to a parallel environment. CodeDeploy installs the new task set (Green), runs health checks, and shifts production traffic from the old task set (Blue) to the new one dynamically via an Application Load Balancer.
+
+### Configuration Implementation
+These deployment boundaries are explicitly defined inside the **ECS Service definition** (under `deploymentConfiguration`), rather than the task definition. 
+
+```json
+"deploymentConfiguration": {
+  "maximumPercent": 200,
+  "minimumHealthyPercent": 100
+}
+```
 
 
 **Q5: A user says "AccessDenied" even though the IAM policy looks correct. What do you check?**
@@ -1672,3 +1733,69 @@ Notice that **you never SSH into any server**. Everything you need comes from lo
 ### Interview Answer (Simple & Natural)
 
 > **"In Fargate, I don't have host access because AWS manages the underlying infrastructure. For logs, I configure the `awslogs` log driver to send container stdout and stderr to CloudWatch Logs. If the organization uses external observability platforms like Datadog or Splunk, I use FireLens with Fluent Bit to route logs there. For infrastructure metrics such as CPU, memory, and network, I enable CloudWatch Container Insights. For application-level traces and custom metrics, I run a monitoring agent such as the Datadog Agent as a sidecar container within the ECS task, since I can't install agents on the host."**
+
+
+
+AWS CDK with Pythons
+---
+
+# 🚀 AWS CDK CLI Interview Guide
+
+A structured guide to the essential AWS Cloud Development Kit (CDK) commands, lifecycle workflows, and high-yield interview questions.
+
+## 🏗️ Project Lifecycle Commands
+
+### `cdk init`
+* **Command:** `cdk init app --language python`
+* **What it does:** Initializes a new CDK project template using a specified programming language.
+* **Interview Context:** Sets up the core directory structure, virtual environment configurations (`.venv`), configuration files (`cdk.json`), and the primary execution entry points.
+
+### `cdk synth`
+* **Command:** `cdk synth`
+* **What it does:** Synthesizes the CDK code into native, raw AWS CloudFormation templates (YAML/JSON).
+* **Interview Context:** Acts as a local compiler. It catches programming mistakes, missing required resource properties, and validation errors *before* any resources are pushed to AWS.
+
+### `cdk bootstrap`
+* **Command:** `cdk bootstrap aws://<account-id>/<region>`
+* **What it does:** Provisions baseline resources (like an S3 staging bucket, ECR container registries, and IAM operational roles) required by CDK to manage deployment assets.
+* **Interview Context:** Must be run exactly once per AWS Account/Region environment. It establishes the "landing pad" for any physical file assets you deploy.
+
+### `cdk diff`
+* **Command:** `cdk diff`
+* **What it does:** Compares your local code changes against the active state of resources currently deployed in your AWS cloud account.
+* **Interview Context:** Crucial safety mechanism used in CI/CD automation pipelines to review upcoming mutations, additions, or resource deletions before approval.
+
+### `cdk deploy`
+* **Command:** `cdk deploy`
+* **What it does:** Deploys the infrastructure stack by submitting the synthesized template directly to AWS CloudFormation.
+* **Interview Context:** Orchestrates the live resource provisioning, safely handles rollback operations if a resource fails to create, and prints real-time creation logs inside the terminal terminal.
+
+### `cdk destroy`
+* **Command:** `cdk destroy`
+* **What it does:** Wipes out and deletes the specified active CloudFormation stacks along with all associated cloud resources.
+* **Interview Context:** Used to prevent unnecessary billing costs on developer sandbox environments when ephemeral infrastructure is no longer in use.
+
+## 🔍 Discovery & Utility Commands
+
+* **`cdk ls`**: Lists all the distinct stack identifiers defined in your multi-stack CDK application.
+* **`cdk doctor`**: Prints diagnostic health information regarding your local CDK CLI version, Node framework paths, and underlying operating system details.
+
+## 💡 High-Yield Interview Deep Dives
+
+### 1. When can you skip `cdk bootstrap`?
+**Answer:** You can skip bootstrapping if your application contains **only pure-configuration structural resources** (like an S3 bucket with basic settings, a VPC network, or a DynamoDB table) and you use a `LegacyStackSynthesizer` or native AWS CLI tools (`aws cloudformation deploy`). Bootstrapping becomes strictly mandatory the moment your project requires asset delivery, such as bundling local Python Lambda code or building local Docker images.
+
+### 2. How do you handle multiple stacks in an application?
+**Answer:** If an application defines multiple stacks, running a bare `cdk deploy` will prompt an error asking for clarification. You must specify the explicit stack name target or use wildcards to build everything at once:
+```bash
+# Deploy a targeted infrastructure stack
+cdk deploy NetworkStack
+
+# Deploy every stack in the application sequentially
+cdk deploy --all
+```
+
+### 3. What is the difference between a Construct and a Stack?
+**Answer:** 
+* **Construct:** The basic building block of CDK apps. They represent a single AWS resource (like `s3.Bucket`) or a higher-level abstraction combining multiple resources (like an API Gateway backed by a Lambda function).
+* **Stack:** The unit of deployment. All constructs must be scoped inside a Stack, and every Stack directly maps 1-to-1 to an AWS CloudFormation Stack.

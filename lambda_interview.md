@@ -256,3 +256,46 @@ The easiest way to build a landing zone is by using AWS Control Tower within a n
 
    5. Deploy: Click launch. The automated setup process takes about 30 to 45 minutes to provision your foundational secure environment.
 
+## Q-3 How AWS Services deployed ?
+
+- Infrastructure is usually deployed using Infrastructure as Code tools such as AWS CDK, CloudFormation, or Terraform rather than manually.
+
+- First Networking should set up like VPC, SG, EC2 . Then DB should set up then our applicatoins should be deployed in services such as lambda, ec2, ecs, eks etc.
+
+- We can deploy aws services using IaC tools like AWS CDK, Terraform rather then manually.
+
+## Q-4 How to upgrade Runtime Version of Lambda for V2 Apps ?
+
+- Choose your lambda functions > Runtime Settings > Edit > Choose latest runtime versions like python 3.12 > Choose Save.
+
+- To `Automatically Upgrade your latest runtime` - Edit `Runtime management configurations` > Choose `Auto` > Choose `Save`.
+
+- **Best Practices** - Backup your lambda before you upgrade.
+
+- **Rollback to previous stable version of lambda** - Use `Runtime Versions ARNs` > Choose `Edit Runtime management configurations` > Choose `Manual` > Enter `Runtime Versions ARNs` > Choose `Save`.
+
+
+## Q-5 How to backup my lambda before you upgrade ?
+
+- Current v1 of Lambda functions you have.
+
+- Publish v2 of lambda functions.
+
+- Create versions of this v1 by using alias.
+
+- Here app code, .zip file dependencies and other settings like env vars, etc will be backup.
+
+- Create Alias > edit for weight alias > choose V2 or V1.
+
+- Choose Weight % like 90% v1 and 10% v2.
+
+- Lambda itself will route traffic. If everything is ok. Edit this Alias weight and change it to 20% to 100% manually and test it.
+
+- THis is manually you are route traffic.
+
+- For Automated `Use AWS CodeDeploy For Automated route Traffic by updating alias weight`.
+
+## Q-6 How do you define SLOs for a new service ?
+
+- "When I define SLOs for a new service, I first understand the business requirements and what users expect. Then I identify the most important SLIs, such as availability, latency, error rate, or throughput. Based on business needs, I set realistic targets. For example, 99.9% availability and API response time under 300 ms for 95% of requests. Finally, I configure monitoring and alerting in tools like CloudWatch, Prometheus, or Datadog to continuously measure whether the service is meeting those SLOs."
+

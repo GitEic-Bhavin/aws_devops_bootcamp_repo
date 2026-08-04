@@ -235,7 +235,7 @@ S3 Bucket
 ## 🛠️ Three-Tier Security Evaluation
 
 | Policy Level    | Location                  | Purpose                                                   |
-|  | - |  |
+| ---- | ---- | ---- |
 | Identity Policy | EC2 Instance Profile Role | Grants outbound permissions to call S3 API                |
 | Endpoint Policy | S3 Gateway Endpoint       | Filters traffic leaving the VPC (prevents exfiltration)   |
 | Resource Policy | S3 Bucket Policy          | Enforces inbound restrictions (requires `aws:sourceVpce`) |

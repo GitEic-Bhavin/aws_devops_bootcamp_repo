@@ -355,7 +355,7 @@ When stale DNS caches cause routing issues during deployments, use one of the fo
 ## 1. AWS Global Accelerator vs Amazon CloudFront
 
 | Feature | AWS Global Accelerator | Amazon CloudFront |
-|-||-|
+|---- | ---- | ---- |
 | Traffic Handling | Assigns two Static Anycast Public IPs | Global CDN Edge Network |
 | DNS Caching Mitigation | Eliminates DNS issues because IPs never change | Uses low TTLs while proxying traffic |
 | Best Use Case | TCP/UDP apps, clients caching IPs aggressively | HTTP/HTTPS websites, APIs, Static Assets |
@@ -373,7 +373,7 @@ Lower Route53 or AWS Cloud Map TTL values to **5–15 seconds** to minimize stal
 # 🔹 4. Quick Reference Summary Table
 
 | Exit Code / Error | Meaning | Primary AWS CLI Command |
-|-||-|
+|----| ---- | ----|
 | Exit Code 137 | Out Of Memory (OOM Killer) | `aws ecs describe-tasks` |
 | Exit Code 1 / 127 | Application Crash / Missing Executable | `aws logs get-log-events` |
 | CannotPullContainer | ECR IAM Failure / Missing Image | `aws ecs describe-tasks` |
@@ -392,3 +392,274 @@ Lower Route53 or AWS Cloud Map TTL values to **5–15 seconds** to minimize stal
 - **Exit Code 127** usually indicates an invalid `ENTRYPOINT` or missing executable in the container image.
 - **AWS Global Accelerator** helps eliminate DNS caching issues by providing static Anycast IP addresses.
 - **Lowering DNS TTL** before deployments helps reduce stale DNS cache problems during traffic cutovers.
+
+# AWS ECS CloudWatch Agent Sidecar – Common Issues & Troubleshooting
+
+This document contains common issues encountered while configuring the **AWS CloudWatch Agent as a Sidecar Container** in **Amazon ECS**, along with their root causes and resolutions.
+
+# Troubleshooting Summary
+
+| Issue / Error | Root Cause | Fix / Solution |
+|---------------|------------|----------------|
+| **ResourceInitializationError: `openat /etc/passwd: no such file or directory`** | The shared volume was mounted on system directories (such as `/tmp`, `/var/log`, etc.), masking essential files inside the container filesystem. | Never mount shared volumes over Linux system directories. Mount the shared volume to an isolated directory such as **`/mnt/nginx_logs`** or another custom path. |
+| **Sidecar Container exits immediately (Exit Code: 1)** | Invalid JSON supplied in `CW_CONFIG_CONTENT` or missing ECS mode configuration. | Validate the JSON. Use a single-line (minified) JSON string and ensure the following exists: `"agent": { "mode": "ecs" }`. |
+| **CloudWatch Log Group (`/ecs/nginx-sidecar-logs`) is not created** | CloudWatch Agent creates log groups only after it detects log files containing actual log entries. Empty log files do not trigger log group creation. | Generate application traffic (for example, `curl http://<TASK_PUBLIC_IP>`) so Nginx writes access logs. The agent will then automatically create the log group and stream. |
+| **AccessDeniedException in CloudWatch Agent logs** | CloudWatch IAM permissions were attached to the **Execution Role** instead of the **Task Role**. The agent runs using the Task Role. | Attach **CloudWatchAgentServerPolicy** (or equivalent CloudWatch Logs permissions) directly to the **ECS Task Role**, not the Execution Role. |
+
+# Best Practices
+
+- Never mount shared volumes over Linux system directories.
+- Always use a dedicated directory for application logs.
+- Validate `CW_CONFIG_CONTENT` JSON before deploying.
+- Keep CloudWatch Agent configuration minified when passing through environment variables.
+- Ensure `"mode": "ecs"` is configured for ECS deployments.
+- Verify the ECS **Task Role** has CloudWatch permissions.
+- Generate application traffic before expecting CloudWatch log groups to appear.
+- Monitor the CloudWatch Agent container logs for faster troubleshooting.
+
+## ALB vs ELB vs GLB Load Balancer
+
+# AWS Load Balancers Interview Notes (ALB vs NLB vs GLB)
+
+> **Interview One-Liner**
+>
+> - **ALB** → Intelligent Layer-7 load balancer for web applications.
+> - **NLB** → High-performance Layer-4 load balancer for TCP/UDP traffic.
+> - **GLB** → Service insertion load balancer used to route traffic through security appliances.
+
+
+# Quick Comparison
+
+| Feature | ALB | NLB | GLB |
+|----------|-----|-----|------|
+| **OSI Layer** | Layer 7 | Layer 4 | Layer 3 / Layer 4 |
+| **Protocols** | HTTP, HTTPS, gRPC | TCP, UDP, TLS | IP (GENEVE) |
+| **Primary Purpose** | Web/Application traffic | High-performance network traffic | Security appliance insertion |
+| **Routing** | Content-based | Connection-based | Network routing |
+| **Connection** | Terminates HTTP/HTTPS | TCP/UDP connection handling | Transparent pass-through |
+| **Target Types** | EC2, IP, Lambda | EC2, IP, ALB | EC2/IP (Virtual Appliances) |
+| **Static IP** | ❌ No | ✅ Yes | ❌ No |
+| **WAF Support** | ✅ Yes | ❌ No | ❌ No |
+| **SSL Termination** | ✅ Yes | ✅ Yes (TLS Listener) | ❌ No |
+
+
+# Routing Algorithm
+
+## Application Load Balancer (ALB)
+
+**Algorithm:** Round Robin *(default)* or Least Outstanding Requests
+
+- Routes HTTP requests one after another
+- Can inspect HTTP headers, URL, Hostname, Cookies
+
+Example:
+
+```
+Client Requests
+
+Request1 → EC2-1
+Request2 → EC2-2
+Request3 → EC2-3
+Request4 → EC2-1
+```
+
+
+## Network Load Balancer (NLB)
+
+**Algorithm:** Flow Hash (5-Tuple Hash)
+
+Uses:
+
+- Source IP
+- Source Port
+- Destination IP
+- Destination Port
+- Protocol
+
+This ensures the same TCP/UDP session always reaches the same backend.
+
+```
+Client
+   │
+TCP Connection
+   │
+Flow Hash
+   │
+EC2 Instance
+```
+
+
+## Gateway Load Balancer (GLB)
+
+**Algorithm:** Routing Table + GENEVE Tunnel
+
+Traffic is redirected through security appliances.
+
+```
+Internet
+    │
+Gateway Load Balancer
+    │
+Firewall / IDS / IPS
+    │
+Application
+```
+
+
+# When to Use
+
+## ALB
+
+Choose ALB when you need:
+
+- Web applications
+- REST APIs
+- Microservices
+- ECS/EKS Ingress
+- Path-based routing
+- Host-based routing
+- HTTPS termination
+- AWS Lambda targets
+
+**Examples**
+
+- `example.com/api`
+- `example.com/images`
+- `app.company.com`
+- `admin.company.com`
+
+
+## NLB
+
+Choose NLB when you need:
+
+- Millions of requests/sec
+- Ultra-low latency
+- TCP/UDP traffic
+- Static IP
+- Database traffic
+- MQTT/IoT
+- Gaming servers
+- Streaming
+
+
+## GLB
+
+Choose GLB when you need:
+
+- Centralized firewall
+- IDS/IPS
+- Deep Packet Inspection
+- Traffic inspection
+- Security appliances
+- Network monitoring
+
+Supports appliances such as:
+
+- Palo Alto
+- Fortinet
+- Check Point
+
+
+# Easy Interview Memory Trick
+
+### ALB = **Application**
+
+- Understands URLs
+- Understands HTTP
+- Smart Routing
+
+
+### NLB = **Network**
+
+- Understands TCP/UDP
+- Fastest Load Balancer
+- Static IP
+
+
+### GLB = **Gateway**
+
+- Security
+- Firewall
+- Traffic Inspection
+
+
+# Interview Questions
+
+### Q1. Which Load Balancer supports Path-based Routing?
+
+✅ **ALB**
+
+
+### Q2. Which Load Balancer supports TCP and UDP?
+
+✅ **NLB**
+
+
+### Q3. Which Load Balancer provides Static IP?
+
+✅ **NLB**
+
+
+### Q4. Which Load Balancer works with AWS WAF?
+
+✅ **ALB**
+
+
+### Q5. Which Load Balancer is used with Firewall appliances?
+
+✅ **GLB**
+
+
+### Q6. Which Load Balancer supports Lambda as a target?
+
+✅ **ALB**
+
+
+### Q7. Which Load Balancer is best for HTTP/HTTPS applications?
+
+✅ **ALB**
+
+
+### Q8. Which Load Balancer is best for Gaming or IoT?
+
+✅ **NLB**
+
+
+### Q9. Which Load Balancer performs Deep Packet Inspection?
+
+✅ **GLB**
+
+
+### Q10. Which Load Balancer uses the 5-Tuple Hash?
+
+✅ **NLB**
+
+
+# 30-Second Interview Answer
+
+> **Application Load Balancer (ALB)** operates at Layer 7 and is designed for HTTP/HTTPS applications. It supports intelligent routing features such as path-based and host-based routing, SSL termination, AWS WAF integration, and Lambda targets.
+>
+> **Network Load Balancer (NLB)** operates at Layer 4 and is optimized for high-performance TCP, UDP, and TLS traffic. It provides ultra-low latency, static IP addresses, and uses a 5-tuple flow hash to keep a connection pinned to the same backend target.
+>
+> **Gateway Load Balancer (GLB)** operates at Layer 3/4 and is used for transparent traffic steering through virtual security appliances such as firewalls and IDS/IPS solutions using the GENEVE protocol. It is ideal for centralized network security architectures.
+
+
+# Interview Cheat Sheet
+
+| Requirement | Best Choice |
+|-------------|-------------|
+| Website | ✅ ALB |
+| REST API | ✅ ALB |
+| Microservices | ✅ ALB |
+| ECS/EKS Ingress | ✅ ALB |
+| Lambda Target | ✅ ALB |
+| Static IP | ✅ NLB |
+| TCP/UDP | ✅ NLB |
+| Gaming | ✅ NLB |
+| IoT | ✅ NLB |
+| Database Connections | ✅ NLB |
+| Firewall | ✅ GLB |
+| IDS / IPS | ✅ GLB |
+| Traffic Inspection | ✅ GLB |
+| Security Appliances | ✅ GLB |

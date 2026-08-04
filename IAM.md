@@ -319,7 +319,7 @@ S3 Bucket
 # 🔹 5. Quick Interview Reference Table
 
 | Requirement                            | Approach               | Key Components Needed                                                              |
-| -- | - | - |
+| ---- | ---- | ---- |
 | Cross-Account (Role Assumption)        | `sts:AssumeRole`       | Target Account Role + Trust Policy + Source Account Identity Policy                |
 | Cross-Account (Direct Resource Access) | Resource-Based Policy  | Target Resource Policy + Source Account Identity Policy (Both Required)            |
 | Secrets Manager in ECS                 | `ecsTaskExecutionRole` | Permission granted to **Task Execution Role**, not Task Role                       |
